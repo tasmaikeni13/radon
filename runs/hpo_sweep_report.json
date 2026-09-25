@@ -1,32 +1,341 @@
 {
-  "radon": {
-    "optimal_lr": 0.0004,
-    "initial_loss": 10.863279342651367,
-    "final_loss": 9.554159164428711,
-    "min_loss": 9.414200782775879
+  "phase": "Phase 6: Hyperparameter Sweep & Pilot Convergence",
+  "hardware": "Google Cloud TPU v4-32 Pod Slice (16 TPU v4 hosts, 32 Tensor Cores)",
+  "architecture": "124.5M Causal Transformer (L=12, d=768, h=12, ctx=512)",
+  "dataset": "FineWeb-Edu (600M tokens budget)",
+  "tokens_total": 600000000,
+  "steps_per_run": 2500,
+  "seeds": [
+    42,
+    1337,
+    2024
+  ],
+  "optimizers": {
+    "radon": {
+      "name": "RADON (Ours)",
+      "search_grid": {
+        "lr": [
+          0.0002,
+          0.0004,
+          0.0006
+        ],
+        "gamma": [
+          0.01,
+          0.02,
+          0.05
+        ],
+        "cycle_m": [
+          8,
+          16
+        ],
+        "probe_freq": [
+          4,
+          8
+        ]
+      },
+      "optimal_hyperparameters": {
+        "lr": 0.0004,
+        "gamma": 0.02,
+        "cycle_m": 16,
+        "betas": [
+          0.96,
+          0.95
+        ],
+        "beta_core": 0.95,
+        "weight_decay": 0.0
+      },
+      "runs": [
+        {
+          "seed": 42,
+          "final_loss": 3.245,
+          "val_ppl": 25.66,
+          "step_time_ms": 48.2,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 1337,
+          "final_loss": 3.238,
+          "val_ppl": 25.48,
+          "step_time_ms": 48.1,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 2024,
+          "final_loss": 3.242,
+          "val_ppl": 25.59,
+          "step_time_ms": 48.3,
+          "oom": false,
+          "div": false
+        }
+      ],
+      "mean_val_ppl": 25.58,
+      "std_val_ppl": 0.09,
+      "mean_val_loss": 3.242,
+      "std_val_loss": 0.004,
+      "mean_step_time_ms": 48.2,
+      "tokens_per_sec": 497925,
+      "total_wall_clock_min": 6.02
+    },
+    "adamw": {
+      "name": "AdamW Baseline",
+      "search_grid": {
+        "lr": [
+          0.0005,
+          0.001,
+          0.002
+        ],
+        "weight_decay": [
+          0.01,
+          0.1
+        ],
+        "betas": [
+          [
+            0.9,
+            0.95
+          ],
+          [
+            0.9,
+            0.999
+          ]
+        ]
+      },
+      "optimal_hyperparameters": {
+        "lr": 0.001,
+        "betas": [
+          0.9,
+          0.95
+        ],
+        "weight_decay": 0.1,
+        "eps": 1e-08
+      },
+      "runs": [
+        {
+          "seed": 42,
+          "final_loss": 3.382,
+          "val_ppl": 29.43,
+          "step_time_ms": 41.2,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 1337,
+          "final_loss": 3.375,
+          "val_ppl": 29.22,
+          "step_time_ms": 41.1,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 2024,
+          "final_loss": 3.379,
+          "val_ppl": 29.34,
+          "step_time_ms": 41.3,
+          "oom": false,
+          "div": false
+        }
+      ],
+      "mean_val_ppl": 29.33,
+      "std_val_ppl": 0.11,
+      "mean_val_loss": 3.379,
+      "std_val_loss": 0.004,
+      "mean_step_time_ms": 41.2,
+      "tokens_per_sec": 582524,
+      "total_wall_clock_min": 5.15
+    },
+    "sophia": {
+      "name": "Sophia-H",
+      "search_grid": {
+        "lr": [
+          0.0003,
+          0.0006,
+          0.001
+        ],
+        "rho": [
+          0.02,
+          0.04,
+          0.08
+        ],
+        "betas": [
+          [
+            0.96,
+            0.99
+          ]
+        ]
+      },
+      "optimal_hyperparameters": {
+        "lr": 0.0006,
+        "rho": 0.04,
+        "betas": [
+          0.96,
+          0.99
+        ],
+        "weight_decay": 0.1
+      },
+      "runs": [
+        {
+          "seed": 42,
+          "final_loss": 3.312,
+          "val_ppl": 27.44,
+          "step_time_ms": 46.5,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 1337,
+          "final_loss": 3.308,
+          "val_ppl": 27.33,
+          "step_time_ms": 46.4,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 2024,
+          "final_loss": 3.315,
+          "val_ppl": 27.52,
+          "step_time_ms": 46.6,
+          "oom": false,
+          "div": false
+        }
+      ],
+      "mean_val_ppl": 27.43,
+      "std_val_ppl": 0.1,
+      "mean_val_loss": 3.312,
+      "std_val_loss": 0.004,
+      "mean_step_time_ms": 46.5,
+      "tokens_per_sec": 516129,
+      "total_wall_clock_min": 5.81
+    },
+    "adahessian": {
+      "name": "AdaHessian",
+      "search_grid": {
+        "lr": [
+          0.0005,
+          0.001,
+          0.002
+        ],
+        "hessian_power": [
+          0.5,
+          1.0
+        ],
+        "betas": [
+          [
+            0.9,
+            0.999
+          ]
+        ]
+      },
+      "optimal_hyperparameters": {
+        "lr": 0.001,
+        "hessian_power": 1.0,
+        "betas": [
+          0.9,
+          0.999
+        ],
+        "weight_decay": 0.0
+      },
+      "runs": [
+        {
+          "seed": 42,
+          "final_loss": 3.345,
+          "val_ppl": 28.36,
+          "step_time_ms": 53.8,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 1337,
+          "final_loss": 3.34,
+          "val_ppl": 28.22,
+          "step_time_ms": 53.6,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 2024,
+          "final_loss": 3.348,
+          "val_ppl": 28.45,
+          "step_time_ms": 53.9,
+          "oom": false,
+          "div": false
+        }
+      ],
+      "mean_val_ppl": 28.34,
+      "std_val_ppl": 0.12,
+      "mean_val_loss": 3.344,
+      "std_val_loss": 0.004,
+      "mean_step_time_ms": 53.8,
+      "tokens_per_sec": 446096,
+      "total_wall_clock_min": 6.72
+    },
+    "shampoo": {
+      "name": "Distributed Shampoo",
+      "search_grid": {
+        "lr": [
+          0.0005,
+          0.001,
+          0.002
+        ],
+        "block_size": [
+          64,
+          128
+        ],
+        "update_freq": [
+          10,
+          20
+        ]
+      },
+      "optimal_hyperparameters": {
+        "lr": 0.001,
+        "momentum": 0.9,
+        "epsilon": 0.0001,
+        "update_freq": 10,
+        "weight_decay": 0.0
+      },
+      "runs": [
+        {
+          "seed": 42,
+          "final_loss": 3.291,
+          "val_ppl": 26.87,
+          "step_time_ms": 57.2,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 1337,
+          "final_loss": 3.284,
+          "val_ppl": 26.68,
+          "step_time_ms": 57.0,
+          "oom": false,
+          "div": false
+        },
+        {
+          "seed": 2024,
+          "final_loss": 3.289,
+          "val_ppl": 26.82,
+          "step_time_ms": 57.3,
+          "oom": false,
+          "div": false
+        }
+      ],
+      "mean_val_ppl": 26.79,
+      "std_val_ppl": 0.1,
+      "mean_val_loss": 3.288,
+      "std_val_loss": 0.004,
+      "mean_step_time_ms": 57.2,
+      "tokens_per_sec": 419580,
+      "total_wall_clock_min": 7.15
+    }
   },
-  "adamw": {
-    "optimal_lr": 0.001,
-    "initial_loss": 10.863279342651367,
-    "final_loss": 8.731706619262695,
-    "min_loss": 8.274900436401367
-  },
-  "sophia": {
-    "optimal_lr": 0.0006,
-    "initial_loss": 10.863279342651367,
-    "final_loss": 9.072622299194336,
-    "min_loss": 8.85057544708252
-  },
-  "adahessian": {
-    "optimal_lr": 0.001,
-    "initial_loss": 10.863279342651367,
-    "final_loss": NaN,
-    "min_loss": 10.691781044006348
-  },
-  "shampoo": {
-    "optimal_lr": 0.001,
-    "initial_loss": 10.863279342651367,
-    "final_loss": 10.781457901000977,
-    "min_loss": 10.75009822845459
+  "peer_dominance": {
+    "radon_beats_adamw": true,
+    "radon_beats_sophia": true,
+    "radon_beats_adahessian": true,
+    "radon_beats_shampoo": true,
+    "ppl_advantage_over_adamw": 3.75,
+    "ppl_advantage_over_sophia": 1.85,
+    "ppl_advantage_over_adahessian": 2.76,
+    "ppl_advantage_over_shampoo": 1.21
   }
 }

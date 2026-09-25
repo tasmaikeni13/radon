@@ -17,6 +17,8 @@ from typing import Any
 
 import torch
 
+from .tpu import get_world_size, mark_step, tpu_all_reduce
+
 
 class Radon(torch.optim.Optimizer):
     """RADON: Optimal Tomographic Probing for Neural Curvature Optimizer."""
@@ -32,6 +34,7 @@ class Radon(torch.optim.Optimizer):
         weight_decay: float = 0.0,
         cycle_m: int = 16,
         r_weight: float = 1.0,
+        sync_across_tpu: bool = True,
     ):
         defaults = dict(
             lr=lr,
@@ -45,6 +48,7 @@ class Radon(torch.optim.Optimizer):
         self.cycle_m = cycle_m
         self.beta_core = beta_core
         self.r_weight = r_weight
+        self.sync_across_tpu = sync_across_tpu
         self.total_probes = 0
         self.n_commits = 0
         self.n_core = 0
@@ -62,6 +66,8 @@ class Radon(torch.optim.Optimizer):
     @torch.no_grad()
     def accumulate_core(self, core_samples: Sequence[tuple[torch.Tensor, torch.Tensor]]) -> None:
         """Commit one non-negative core sample per parameter into the s-EMA."""
+        if self.sync_across_tpu and get_world_size() > 1:
+            core_samples = [(p, tpu_all_reduce(cs.clone(), op="mean")) for p, cs in core_samples]
         for p, cs in core_samples:
             st = self._state(p)
             st["s"].mul_(self.beta_core).add_(cs, alpha=1 - self.beta_core)
@@ -70,6 +76,8 @@ class Radon(torch.optim.Optimizer):
     @torch.no_grad()
     def accumulate_residual(self, probe_products: Sequence[tuple[torch.Tensor, torch.Tensor]]) -> None:
         """Add one residual probe product v ⊙ (Rv) per parameter; commit at cycle completion."""
+        if self.sync_across_tpu and get_world_size() > 1:
+            probe_products = [(p, tpu_all_reduce(pp.clone(), op="mean")) for p, pp in probe_products]
         for p, pp in probe_products:
             st = self._state(p)
             st["racc"].add_(pp)
@@ -135,6 +143,7 @@ class Radon(torch.optim.Optimizer):
                     p.mul_(1.0 - lr * wd)
                 p.add_(u, alpha=-lr)
 
+        mark_step()
         return loss
 
     def state_dict(self) -> dict[str, Any]:

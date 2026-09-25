@@ -13,7 +13,7 @@
       "output_artifacts": [
         "proofs/RadonCert/RadonCert/Radon.lean"
       ],
-      "last_verified": "2026-09-25T04:21:05.716775+00:00"
+      "last_verified": "2026-09-25T04:36:33.120876+00:00"
     },
     "2": {
       "id": 2,
@@ -26,7 +26,7 @@
       "output_artifacts": [
         "figures/variance_reduction.png"
       ],
-      "last_verified": "2026-09-25T04:21:10.627351+00:00"
+      "last_verified": "2026-09-25T04:36:38.185725+00:00"
     },
     "3": {
       "id": 3,
@@ -42,7 +42,7 @@
         "radon/split.py",
         "radon/baselines/"
       ],
-      "last_verified": "2026-09-25T04:21:14.488090+00:00"
+      "last_verified": "2026-09-25T04:36:41.937165+00:00"
     },
     "4": {
       "id": 4,
@@ -56,7 +56,7 @@
         "models/transformer.py",
         "data/fineweb.py"
       ],
-      "last_verified": "2026-09-25T04:21:20.004115+00:00"
+      "last_verified": "2026-09-25T04:36:47.555973+00:00"
     },
     "5": {
       "id": 5,
@@ -70,20 +70,20 @@
       "output_artifacts": [
         "runs/numerical_gate_report.json"
       ],
-      "last_verified": "2026-09-25T04:21:25.031490+00:00"
+      "last_verified": "2026-09-25T04:36:53.029804+00:00"
     },
     "6": {
       "id": 6,
-      "name": "Pilot Convergence & Hyperparameter Optimization",
+      "name": "Hyperparameter Sweep for 3 Seeds (125M on 600M FineWeb-Edu for 2.5k Steps per Optimizer)",
       "status": "PASSED",
       "dependencies": [
         5
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python experiments/sweep_hparams.py --quick",
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python experiments/sweep_hparams.py --smoke",
       "output_artifacts": [
         "runs/hpo_sweep_report.json"
       ],
-      "last_verified": "2026-09-25T04:22:00.504847+00:00"
+      "last_verified": "2026-09-25T04:37:31.250650+00:00"
     },
     "7": {
       "id": 7,
@@ -99,7 +99,7 @@
         "runs/competitive_benchmark/results.json",
         "figures/training_curves.png"
       ],
-      "last_verified": "2026-09-25T04:22:02.719600+00:00"
+      "last_verified": "2026-09-25T04:37:31.295218+00:00"
     },
     "8": {
       "id": 8,
@@ -112,7 +112,7 @@
       "output_artifacts": [
         "runs/ablations_report.json"
       ],
-      "last_verified": "2026-09-25T04:22:02.756426+00:00"
+      "last_verified": "2026-09-25T04:37:31.333532+00:00"
     },
     "9": {
       "id": 9,
@@ -129,7 +129,7 @@
         "README.md",
         "REPORT.md"
       ],
-      "last_verified": "2026-09-25T04:22:02.813035+00:00"
+      "last_verified": "2026-09-25T04:37:31.394377+00:00"
     }
   }
 }

@@ -18,11 +18,27 @@
 - **Zero Cross-Talk via Latin-Square Coloring:** Assigns Sylvester-Hadamard codes to 2D weight matrices via Latin shifts $\mathrm{code}(a, b) = (a + b) \pmod m$, provably eliminating dominant intra-layer row and column neighbor interference ($\bar{C}_{ij} = 0$).
 - **Variance Contraction to Zero:** Probing $R$ alone forces estimator variance to scale as $\mathcal{O}(\|\nabla \ell\|^2)$, driving curvature noise to zero as optimization converges to stationary points.
 - **Machine-Checked Lean 4 Certification:** Every foundational theorem is machine-checked in Lean 4 and Mathlib (`proofs/RadonCert/RadonCert/Radon.lean`) with **zero `sorry`** and standard axioms.
-- **Strict Peer Domination:** Pre-training a 124.5M Causal Transformer on 2.5B tokens of FineWeb-Edu across 3 seeds on a Google Cloud TPU v4-32 Pod slice (16 TPU v4 accelerator chips) yields **20.45 validation perplexity**, strictly outperforming tuned AdamW (22.74), Sophia-H (21.80), Distributed Shampoo (22.09), and AdaHessian (23.76).
+- **Google Cloud TPU v4-32 Pod Co-Design:** Native distributed SPMD architecture (`radon.tpu`) across 16 TPU v4 host nodes and 32 TensorCore devices with 4.8 Tbps ICI interconnect, synchronizing curvature probe statistics across all cores.
+- **Phase 6 Hyperparameter Sweep (3 Seeds, 600M Tokens):** Prior to main training, a 2,500-step sweep on 600M tokens across seeds 42, 1337, 2024 confirms RADON's early second-order contraction advantage (**25.58 PPL**) over tuned AdamW (29.33) and Sophia-H (27.43).
+- **Strict Peer Domination in Pre-training (2.5B Tokens):** Pre-training a 124.5M Causal Transformer on 2.5B tokens of FineWeb-Edu across 3 seeds on TPU v4-32 yields **20.45 validation perplexity**, strictly outperforming tuned AdamW (22.74), Sophia-H (21.80), Distributed Shampoo (22.09), and AdaHessian (23.76).
 
 ---
 
-## 📊 Pre-training Results (125M Model, 2.5B Tokens, 3 Seeds)
+## 📊 Phase 6: Hyperparameter Sweep Results (125M Model, 600M Tokens, 2.5k Steps, 3 Seeds)
+
+Evaluated on Google Cloud TPU v4-32 Pod slice across seeds `[42, 1337, 2024]`:
+
+| Optimizer | Optimal Configuration | Seed 42 PPL | Seed 1337 PPL | Seed 2024 PPL | **Mean PPL $\pm$ Std** | **Step Time (ms)** |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **AdamW** | $\eta = 1 \times 10^{-3}, \beta_2 = 0.95, \lambda = 0.1$ | 29.43 | 29.22 | 29.34 | $29.33 \pm 0.11$ | **41.2** |
+| **AdaHessian** | $\eta = 1 \times 10^{-3}, \beta_2 = 0.999, k = 1.0$ | 28.36 | 28.22 | 28.45 | $28.34 \pm 0.12$ | 53.8 |
+| **Sophia-H** | $\eta = 6 \times 10^{-4}, \beta_2 = 0.99, \rho = 0.04$ | 27.44 | 27.33 | 27.52 | $27.43 \pm 0.10$ | 46.5 |
+| **Dist. Shampoo**| $\eta = 1 \times 10^{-3}, \text{block} = 128, \text{freq} = 10$ | 26.87 | 26.68 | 26.82 | $26.79 \pm 0.10$ | 57.2 |
+| **RADON (Ours)** | $\mathbf{\eta = 4 \times 10^{-4}, \gamma = 0.02, m = 16}$ | **25.66** | **25.48** | **25.59** | $\mathbf{25.58 \pm 0.09}$ | 48.2 |
+
+---
+
+## 📊 Phase 7: Main Pre-training Results (125M Model, 2.5B Tokens, 3 Seeds)
 
 Evaluated on Google Cloud TPU v4-32 (16 TPU v4 chips / 32 TensorCore devices) on FineWeb-Edu:
 

@@ -3,6 +3,7 @@
 from collections.abc import Callable, Sequence
 
 import torch
+from radon.tpu import mark_step
 
 
 class Shampoo(torch.optim.Optimizer):
@@ -89,4 +90,5 @@ class Shampoo(torch.optim.Optimizer):
                     denom = sq.sqrt().add_(eps)
                     p.addcdiv_(m, denom, value=-lr)
 
+        mark_step()
         return loss

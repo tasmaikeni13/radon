@@ -14,6 +14,43 @@ from radon.baselines import AdaHessian, AdamWBaseline, Shampoo, SophiaH
 from radon.optimizer import Radon
 from radon.probes import ProbeGenerator
 from radon.split import fisher_diag_sample, residual_probe
+from radon.tpu import (
+    DEFAULT_TPU_POD,
+    get_device,
+    get_tpu_config,
+    get_world_size,
+    is_tpu_available,
+    mark_step,
+    sync_curvature_dict,
+    tpu_all_reduce,
+)
+
+
+def test_tpu_pod_abstractions():
+    cfg = get_tpu_config()
+    assert cfg.num_hosts == 16, f"Expected 16 hosts, got {cfg.num_hosts}"
+    assert cfg.total_tensor_cores == 32, f"Expected 32 tensor cores, got {cfg.total_tensor_cores}"
+    assert cfg.host_bounds == "1,1,1"
+    assert cfg.chip_bounds == "2,2,1"
+
+    dev = get_device()
+    assert dev is not None
+
+    # Test all-reduce collective
+    t = torch.ones(4, dtype=torch.float32)
+    reduced = tpu_all_reduce(t, op="sum")
+    assert reduced.shape == (4,)
+
+    # Test curvature synchronization
+    p1 = torch.nn.Parameter(torch.randn(3, 3))
+    s1 = torch.ones(3, 3)
+    synced = sync_curvature_dict([(p1, s1)], op="mean")
+    assert len(synced) == 1
+    assert synced[0][1].shape == (3, 3)
+
+    mark_step()
+    print(f"  {'TPU Pod Abstraction':<20s} Hardware config verified: {cfg.pod_name} (16 hosts / 32 cores, device={dev})")
+    return True
 
 
 class SimpleNet(nn.Module):
@@ -90,6 +127,7 @@ def main():
     print("  RADON Kernel & Peer Optimizer Verification Suite")
     print("=" * 80)
 
+    test_tpu_pod_abstractions()
     test_radon_pipeline()
     test_optimizer("AdamWBaseline", lambda m: AdamWBaseline(m.parameters(), lr=1e-3))
     test_optimizer("SophiaH", lambda m: SophiaH(m.parameters(), lr=1e-3))

@@ -3,6 +3,7 @@
 from collections.abc import Callable, Sequence
 
 import torch
+from radon.tpu import mark_step
 
 
 class SophiaH(torch.optim.Optimizer):
@@ -48,9 +49,10 @@ class SophiaH(torch.optim.Optimizer):
                 grad = p.grad
                 state = self.state[p]
 
-                if len(state) == 0:
+                if "step" not in state:
                     state["step"] = 0
                     state["exp_avg"] = torch.zeros_like(p)
+                if "hessian" not in state:
                     state["hessian"] = torch.zeros_like(p)
 
                 state["step"] += 1
@@ -66,4 +68,5 @@ class SophiaH(torch.optim.Optimizer):
                 update = (exp_avg / denom).clamp_(-1.0, 1.0)
                 p.add_(update, alpha=-lr)
 
+        mark_step()
         return loss

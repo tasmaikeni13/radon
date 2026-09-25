@@ -109,7 +109,7 @@ graph TD
     P2 --> P5["Phase 5: Numerical Exactness Gate"]
     P3 --> P4["Phase 4: Frontier Architectures (125M & ViT)"]
     P4 --> P5
-    P5 --> P6["Phase 6: Pilot Convergence & HPO"]
+    P5 --> P6["Phase 6: 3-Seed HPO Sweep (125M / 600M Tokens)"]
     P3 --> P7["Phase 7: Large-Scale Competitive Benchmark"]
     P4 --> P7
     P6 --> P7
@@ -130,7 +130,7 @@ Whenever changes are committed to a phase, the agent must check the dependency t
 | **Hardware Cost Model / Kernel Change** (Phase 3) | Phase 4, Phase 7, Phase 9 | 1. Re-profile step time on TPU v4 TensorCores.<br/>2. Re-compile JAX forward-over-reverse autodiff graphs.<br/>3. Verify baseline kernels (`Sophia`, `Shampoo`, `AdaHessian`).<br/>4. Update Table 1 and Section 4 of `paper/radon.tex`. |
 | **Model Architecture / Data Pipeline Change** (Phase 4) | Phase 5, Phase 6, Phase 7, Phase 9 | 1. Verify 124.5M Causal Transformer and ViT-Small/16 smoke tests.<br/>2. Re-record optimization trajectories on FineWeb-Edu.<br/>3. Update model description paragraphs in `paper/radon.tex`. |
 | **Exactness Gate / Tolerance Change** (Phase 5) | Phase 6, Phase 7, Phase 9 | 1. Update fp64 tolerances in `verify/numerical_gate.py`.<br/>2. Confirm machine-precision zero-variance cancellation.<br/>3. Update Section 5 of `paper/radon.tex`. |
-| **HPO / Hyperparameter Change** (Phase 6) | Phase 7, Phase 9 | 1. Re-run peer sweeps across learning rate and damping $\gamma$.<br/>2. Update `runs/hpo_sweep_report.json`.<br/>3. Verify optimal $\gamma = 0.02$ and probe period $k=16$. |
+| **HPO / Hyperparameter Change** (Phase 6) | Phase 7, Phase 9 | 1. Re-run 3-seed sweeps across 600M tokens on TPU v4-32 pod.<br/>2. Update `runs/hpo_sweep_report.json`.<br/>3. Verify optimal $\gamma = 0.02$ and probe cycle $m=16$. |
 | **Benchmark Metric / Baseline Result Change** (Phase 7) | Phase 8, Phase 9 | 1. Re-run all 4 baseline comparisons across all 3 seeds.<br/>2. Update benchmark JSON files in `runs/competitive_benchmark/`.<br/>3. Re-render Table 1 and Figures 1, 2, 3 in `paper/radon.tex`.<br/>4. Recompile paper to produce updated `paper/radon.pdf`. |
 
 ---

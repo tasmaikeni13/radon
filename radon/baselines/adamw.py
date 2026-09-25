@@ -4,6 +4,7 @@ import math
 from collections.abc import Callable, Sequence
 
 import torch
+from radon.tpu import mark_step
 
 
 class AdamWBaseline(torch.optim.Optimizer):
@@ -59,4 +60,5 @@ class AdamWBaseline(torch.optim.Optimizer):
                 step_size = lr / bias_correction1
                 p.addcdiv_(exp_avg, denom, value=-step_size)
 
+        mark_step()
         return loss

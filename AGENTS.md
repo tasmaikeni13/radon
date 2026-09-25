@@ -62,7 +62,7 @@ cd proofs/RadonCert && ~/.elan/bin/lake build    # Compile & machine-check all f
 # --- Competitive Benchmarks, Sweeps & Ablations ---
 python3 experiments/run_competitive_benchmark.py --smoke  # Fast sanity run of 124.5M peer competition
 python3 experiments/run_ablations.py --smoke              # Fast sanity run of ablation suite
-python3 experiments/sweep_hparams.py --smoke              # Fast sanity run of hyperparameter search
+python3 experiments/sweep_hparams.py --smoke              # Fast sanity run of 3-seed 125M 600M-token HPO sweep
 python3 scripts/make_plots.py                             # Re-render all PNG figures in figures/
 
 # --- Camera-Ready LaTeX Paper Compilation ---
@@ -75,7 +75,8 @@ cd paper && pdflatex -interaction=nonstopmode radon.tex && bibtex radon && pdfla
 
 | Path | Purpose | Key Symbols / Files |
 | :--- | :--- | :--- |
-| `radon/` | Core second-order optimizer library | `RadonOptimizer`, `radon_step`, `hvp`, `split`, `probes` |
+| `radon/` | Core second-order optimizer library | `RadonOptimizer`, `radon_step`, `hvp`, `split`, `probes`, `tpu` |
+| `radon/tpu.py` | Google Cloud TPU v4-32 Pod hardware co-design | `get_device`, `mark_step`, `tpu_all_reduce`, `sync_curvature_dict`, `TPUPodConfig` |
 | `radon/hvp.py` | Exact reverse-over-forward autodiff | `hvp_forward_over_reverse`, `batched_hvp` |
 | `radon/probes.py` | Probing & coded matrix recovery | `antithetic_rademacher_probes`, `hadamard`, `coded_diagonal_recovery` |
 | `radon/split.py` | Curvature decomposition | `fisher_diag_sample`, `residual_probe`, `split_hvp` |

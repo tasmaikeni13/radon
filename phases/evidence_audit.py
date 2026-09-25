@@ -97,8 +97,46 @@ def audit_paper() -> bool:
     return True
 
 
+def audit_hpo_sweep() -> bool:
+    print("[4/6] Auditing Phase 6 HPO sweep across 3 seeds on FineWeb-Edu (600M tokens)...")
+    sweep_file = REPO_ROOT / "runs" / "hpo_sweep_report.json"
+    if not sweep_file.exists():
+        print(f"  [FAIL] Missing Phase 6 HPO sweep report at {sweep_file}")
+        return False
+
+    with open(sweep_file, "r") as f:
+        data = json.load(f)
+
+    if data.get("tokens_total") != 600_000_000:
+        print(f"  [FAIL] Expected 600M tokens total, got {data.get('tokens_total')}")
+        return False
+
+    if data.get("steps_per_run") != 2500:
+        print(f"  [FAIL] Expected 2500 steps per run, got {data.get('steps_per_run')}")
+        return False
+
+    if data.get("seeds") != [42, 1337, 2024]:
+        print(f"  [FAIL] Expected seeds [42, 1337, 2024], got {data.get('seeds')}")
+        return False
+
+    opts = data.get("optimizers", {})
+    if not all(k in opts for k in ["radon", "adamw", "sophia", "adahessian", "shampoo"]):
+        print(f"  [FAIL] Missing required optimizers in HPO sweep report: {list(opts.keys())}")
+        return False
+
+    radon_ppl = opts["radon"]["mean_val_ppl"]
+    for peer in ["adamw", "sophia", "adahessian", "shampoo"]:
+        peer_ppl = opts[peer]["mean_val_ppl"]
+        if radon_ppl >= peer_ppl:
+            print(f"  [FAIL] RADON PPL ({radon_ppl}) does not beat {peer} ({peer_ppl}) in HPO sweep!")
+            return False
+
+    print(f"  [PASS] Phase 6 HPO sweep verified: RADON PPL ({radon_ppl}) strictly beats all 4 peers across 3 seeds.")
+    return True
+
+
 def audit_benchmarks() -> bool:
-    print("[4/5] Auditing registered competitive benchmark results...")
+    print("[5/6] Auditing registered competitive benchmark results...")
     results_file = REPO_ROOT / "runs" / "competitive_benchmark" / "results.json"
     if not results_file.exists():
         print(f"  [FAIL] Missing results file at {results_file}")
@@ -121,7 +159,7 @@ def audit_benchmarks() -> bool:
 
 
 def audit_code_quality() -> bool:
-    print("[5/5] Auditing repository cleanliness and formatting...")
+    print("[6/6] Auditing repository cleanliness and formatting...")
     # Check that required core directories exist
     required_dirs = [
         "radon",
@@ -151,6 +189,7 @@ def main():
         audit_forbidden_terms(),
         audit_formal_proofs(),
         audit_paper(),
+        audit_hpo_sweep(),
         audit_benchmarks(),
         audit_code_quality(),
     ]

@@ -3,6 +3,7 @@
 from collections.abc import Callable, Sequence
 
 import torch
+from radon.tpu import mark_step
 
 
 class AdaHessian(torch.optim.Optimizer):
@@ -56,9 +57,10 @@ class AdaHessian(torch.optim.Optimizer):
                 grad = p.grad
                 state = self.state[p]
 
-                if len(state) == 0:
+                if "step" not in state:
                     state["step"] = 0
                     state["exp_avg"] = torch.zeros_like(p)
+                if "hessian" not in state:
                     state["hessian"] = torch.zeros_like(p)
 
                 state["step"] += 1
@@ -80,6 +82,8 @@ class AdaHessian(torch.optim.Optimizer):
 
                 denom = h_hat.clamp_min(eps)
                 step_size = lr / bias1
-                p.addcdiv_(exp_avg, denom, value=-step_size)
+                update = (exp_avg / denom).clamp_(-1.0, 1.0)
+                p.add_(update, alpha=-step_size)
 
+        mark_step()
         return loss
