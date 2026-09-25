@@ -1,8 +1,7 @@
 # AGENTS.md
 
 > **Standard**: Compliant with the Linux Foundation / Agentic AI Foundation (AAIF) open standard for AI coding agents.  
-> **Target Audience**: AI coding assistants (Claude Code, Cursor, Windsurf, Codex, Antigravity, Aider, Goose, Copilot, A2A).  
-> **Interoperability**: If using Claude Code or Cursor, symlink this file: `ln -sf AGENTS.md CLAUDE.md` and `ln -sf AGENTS.md .cursorrules`.
+> **Target Audience**: AI coding assistants (Claude Code, Cursor, Windsurf, Codex, Antigravity, Aider, Goose, Copilot, A2A).
 
 ---
 
