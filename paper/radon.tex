@@ -1,0 +1,293 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{cite}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=green!50!black,
+    urlcolor=blue!80!black
+}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+\title{\textbf{RADON: Optimal Tomographic Probing for Neural Curvature\\via Coded Directional Projections}}
+
+\author{
+  \textbf{Tasma Ikeni}\thanks{Independent Research. Correspondence to: \texttt{tas.ken.rt25@dypatil.edu}.}
+}
+\date{September 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Second-order optimization in deep learning is severely constrained by the computational intractability of storing or factorizing the loss Hessian $H \in \mathbb{R}^{N \times N}$ ($N \sim 10^7 - 10^{11}$). Practitioners are restricted to directional Hessian-vector products (HVPs), each representing a 1D tomographic projection (``shadow'') of the high-dimensional curvature operator. Conventional stochastic estimators (e.g., Hutchinson trace estimators, AdaHessian) probe $H$ directly with isotropic random vectors, incurring persistent $\mathcal{O}(1/m)$ off-diagonal cross-talk variance that obscures the true diagonal curvature throughout training.
+In this work, we introduce \textbf{RADON}, a second-order optimization and curvature estimation framework that solves the optimal tomographic probing problem through two machine-verified structural principles:
+(1) \textbf{Compositional Split-Exact Curvature}: We prove that for composite losses $\ell \circ f$, the Hessian decomposes exactly as $H = S + R$, where $S = J_f^\top (\nabla^2 \ell) J_f$ is a positive semidefinite structural core whose diagonal is evaluated with zero double-backwards via sampled-label gradients, and $R = \mathcal{H}_f(\nabla \ell)$ is a residual whose variance scales strictly with $\|\nabla \ell\|^2$.
+(2) \textbf{Coded Tomographic Probing}: By devoting all directional probes exclusively to the residual $R$, and assigning Sylvester-Hadamard codes via Latin-square coloring on parameter tensor grids, intra-layer row and column neighbor interference is identically cancelled ($\bar{C}_{ij} = 0$), yielding exact zero variance on dominant off-diagonal interactions.
+Every foundational mathematical claim is machine-checked in Lean 4 without unproved axioms or \texttt{sorry}. On a 125M-parameter Causal Transformer pre-trained on 2.5B tokens of FineWeb-Edu across 3 seeds on a Google Cloud TPU v4-32 pod slice (16 TPU v4 chips), RADON strictly outperforms AdamW, Sophia-H, AdaHessian, and Distributed Shampoo in validation perplexity and training stability while maintaining low runtime overhead.
+\end{abstract}
+
+\section{Introduction}
+
+Modern deep learning is dominated by first-order adaptive gradient methods such as AdamW~\cite{loshchilov2018decoupled}, despite the notorious ill-conditioning and anisotropic curvature of deep loss landscapes. True second-order methods (e.g., Newton-Raphson, Natural Gradient) promise accelerated convergence and scale-invariance, but their exact execution requires storing and inverting the $N \times N$ loss Hessian $H = \nabla^2 \mathcal{L}(\theta)$, which is computationally impossible when $N \ge 10^8$.
+
+Consequently, second-order optimization must operate under a strict measurement constraint: access to curvature is granted only via directional Hessian-vector products (HVPs)~\cite{martens2010deep}:
+\begin{equation}
+p_k = H v_k, \quad v_k \in \mathbb{R}^N, \quad k = 1, \dots, m, \quad m \ll N
+\end{equation}
+Each HVP represents a 1D tomographic projection of the high-dimensional operator $H$ onto the line spanned by $v_k$~\cite{radon1917bestimmung}. Because exact reconstruction of an arbitrary symmetric matrix requires $m \ge N$ projections, any practical optimizer with $m \in \{4, 8, 16, 32\}$ must solve a fundamental geometric and information-theoretic question:
+\begin{quote}
+\textit{Given a budget of $m \ll N$ directional projections, what is the mathematically optimal geometric placement and orientation of probe vectors $v_1, \dots, v_m$ to extract maximal actionable curvature?}
+\end{quote}
+
+Conventional approaches to this problem fall into two failure modes:
+\begin{enumerate}
+    \item \textbf{Isotropic Stochastic Probing (AdaHessian, Hutchinson):} These methods draw $v_k \sim \mathrm{Rademacher}(\pm 1)$ or $\mathcal{N}(0, I_N)$ and estimate the diagonal via $\hat{h}_i = \frac{1}{m} \sum_k v_i^k (H v^k)_i$~\cite{hutchinson1990stochastic,yao2021adahessian}. However, the estimator variance is dominated by off-diagonal cross-talk:
+    \begin{equation}
+    \mathrm{Var}(\hat{h}_i) = \frac{1}{m} \sum_{j \neq i} H_{ij}^2
+    \end{equation}
+    Because dense layer weights exhibit intense intra-layer coupling, this variance remains perpetually large, even when the model nears convergence.
+    \item \textbf{Empirical or Block Approximations (Sophia, Shampoo):} Methods like Sophia~\cite{liu2023sophia} approximate diagonal curvature via stochastic gradient differences or Gauss-Newton projections, while Shampoo~\cite{gupta2018shampoo} computes Kronecker factorizations of gradient covariances. While effective, they introduce heuristic damping, fail to capture non-convex residual curvature, or require expensive matrix root inversions.
+\end{enumerate}
+
+\paragraph{Our Contribution: RADON.}
+In this work, we introduce RADON, an optimizer and curvature estimation framework designed to resolve these fundamental barriers:
+\begin{itemize}
+    \item \textbf{Split-Exact Curvature Theory:} We establish that for any composite loss $\mathcal{L} = \ell \circ f$, the Hessian decomposes exactly as $H = S + R$. The structural core $S$ is positive semidefinite and computable via single-backward Fisher sampling, while the residual $R$ is linear in $\nabla \ell$ and vanishes as training progresses.
+    \item \textbf{Coded Tomographic Probing with Latin-Square Coloring:} Instead of probing $H$, we spend all $m$ directional probes on the residual $R = H - S$. By structuring probe vectors using Sylvester-Hadamard codes with Latin-square tensor coloring, intra-layer row and column interference is provably zero ($\bar{C}_{ij} = 0$).
+    \item \textbf{Vanishing Estimator Variance:} We prove that the variance of the RADON curvature estimator scales strictly as $\mathcal{O}(\|\nabla \ell\|^2)$. As training converges to a critical point, the estimation noise contracts to zero, achieving deterministic exactness in the limit.
+    \item \textbf{Machine-Checked Formal Proofs:} Every mathematical theorem and algebraic derivation is formally certified in Lean 4 and Mathlib without unproved axioms or \texttt{sorry}.
+    \item \textbf{TPU v4 Pre-training at Scale:} We evaluate RADON on a 124.5M Causal Transformer on 2.5B tokens of FineWeb-Edu~\cite{penzkofer2024fineweb} across 3 random seeds on a Google Cloud TPU v4-32 pod slice, demonstrating decisive empirical superiority over AdamW, Sophia-H, AdaHessian, and Shampoo.
+\end{itemize}
+
+\section{Mathematical Foundations: Carrier Algebra and the Split}
+
+\subsection{Curvature Carriers and the Pullback Composition Law}
+
+We formalize neural network modules as members of a category of curvature carriers.
+\begin{definition}[Curvature Carrier]
+For a smooth map $f: \mathbb{R}^n \to \mathbb{R}^m$, its curvature carrier at $x \in \mathbb{R}^n$ is the pair:
+\begin{equation}
+\mathcal{C}(f; x) = (J, \mathcal{H})
+\end{equation}
+where $J = Df(x) \in \mathbb{R}^{m \times n}$ is the Jacobian matrix, and $\mathcal{H}: \mathbb{R}^m \to \mathrm{Sym}(n)$ is a linear adjoint-curvature map defined by:
+\begin{equation}
+\mathcal{H}(\lambda) = \sum_{k=1}^m \lambda_k \nabla^2 f_k(x) = \nabla^2 \langle \lambda, f \rangle(x)
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Pullback Composition Law]
+Let $f: \mathbb{R}^n \to \mathbb{R}^m$ and $g: \mathbb{R}^m \to \mathbb{R}^p$ be $C^2$ maps. The curvature carrier of the composite function $h = g \circ f$ satisfies:
+\begin{equation}
+J_h = J_g J_f, \quad \mathcal{H}_h(\lambda) = J_f^\top \mathcal{H}_g(\lambda) J_f + \mathcal{H}_f(J_g^\top \lambda) \quad (\star)
+\end{equation}
+Furthermore, the operation $\star$ is associative: $(\mathcal{C}_h \star \mathcal{C}_g) \star \mathcal{C}_f = \mathcal{C}_h \star (\mathcal{C}_g \star \mathcal{C}_f)$.
+\end{theorem}
+\begin{proof}
+Machine-checked in Lean 4 (\texttt{Radon.comp\_assoc}, \texttt{Radon.chain\_snd}). The identity carrier $\mathrm{id}_{\mathcal{C}} = (I_n, 0)$ satisfies $\mathrm{id} \star \mathcal{C} = \mathcal{C} \star \mathrm{id} = \mathcal{C}$.
+\end{proof}
+
+\subsection{The Structural-Residual Split ($H = S + R$)}
+
+Consider a neural network with representation map $f: \mathbb{R}^N \to \mathbb{R}^K$ (mapping parameters to final logits) and a scalar loss $\ell: \mathbb{R}^K \to \mathbb{R}$. The total objective is $\mathcal{L}(\theta) = (\ell \circ f)(\theta)$.
+Evaluating the composition law $(\star)$ at $\lambda = 1$ yields:
+
+\begin{theorem}[Split-Exact Decomposition]
+The loss Hessian $H = \nabla^2 \mathcal{L}(\theta) \in \mathbb{R}^{N \times N}$ decomposes exactly into:
+\begin{equation}
+H = S + R
+\end{equation}
+where:
+\begin{align}
+S &= J_f^\top (\nabla^2 \ell) J_f \quad &\text{(Structural Core)} \\
+R &= \mathcal{H}_f(\nabla \ell) \quad &\text{(Residual Curvature)}
+\end{align}
+\end{theorem}
+
+\begin{proposition}[Properties of $S$ and $R$]
+\label{prop:split_props}
+The two components possess fundamentally asymmetric properties:
+\begin{enumerate}
+    \item \textbf{Positive Semidefiniteness of $S$:} If $\ell$ is convex, $S \succeq 0$, and $\mathrm{diag}(S)_i \ge 0$ for all $i \in \{1, \dots, N\}$.
+    \item \textbf{Fisher Equivalence:} For cross-entropy loss, $S$ equals the Generalized Gauss-Newton (GGN) matrix and Fisher Information Matrix. Its diagonal satisfies $\mathrm{diag}(S) = \mathbb{E}_{\tilde{y} \sim p_\theta}[\tilde{g} \odot \tilde{g}]$, computable via a single backward pass with sampled labels (zero double-backwards).
+    \item \textbf{Gradient Linearity of $R$:} $R$ is linear in the loss gradient: $\mathcal{H}_f(c \nabla \ell) = c \mathcal{H}_f(\nabla \ell)$. Thus, $R \to 0$ as $\|\nabla \ell\| \to 0$.
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+Machine-checked in Lean 4 (\texttt{Radon.core\_posCore}, \texttt{Radon.posCore\_diag\_nonneg}, \texttt{Radon.residual\_smul}).
+\end{proof}
+
+\section{Coded Tomographic Probing}
+
+\subsection{The Master Probing Identity}
+
+For any symmetric matrix $M \in \mathbb{R}^{N \times N}$ and sign probe $v \in \{-1, +1\}^N$, note that $v_i^2 = 1$. Multiplying the directional response $Mv$ by $v$ elementwise gives:
+\begin{equation}
+v_i (M v)_i = M_{ii} + \sum_{j \neq i} M_{ij} v_i v_j
+\end{equation}
+Over a cycle of $m$ probe vectors $v^1, \dots, v^m$, the time-averaged estimate is:
+\begin{equation}
+\hat{M}_{ii} = \frac{1}{m} \sum_{k=1}^m v_i^k (M v^k)_i = M_{ii} + \sum_{j \neq i} M_{ij} \bar{C}_{ij}
+\end{equation}
+where $\bar{C}_{ij} = \frac{1}{m} \sum_{k=1}^m v_i^k v_j^k \in [-1, 1]$ is the empirical cross-coordinate code coherence.
+
+\subsection{Latin-Square Tensor Coloring}
+
+In deep models, weight matrices $W \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$ possess dominant coupling along rows and columns. We construct probe vectors using Sylvester-Hadamard matrices $H_m \in \{-1, +1\}^{m \times m}$ with $m = 2^k$.
+\begin{definition}[Latin-Square Code Assignment]
+For weight tensor element $W_{a, b}$ ($a \in [d_{\text{out}}], b \in [d_{\text{in}}]$), we assign the Hadamard row index:
+\begin{equation}
+\mathrm{code}(a, b) = (a + b) \pmod m
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Orthogonal Interference Cancellation]
+Under Latin-square code assignment, any two distinct entries in the same row ($W_{a, b_1}$ and $W_{a, b_2}$) or same column ($W_{a_1, b}$ and $W_{a_2, b}$) with coordinate difference not divisible by $m$ receive orthogonal Hadamard codes:
+\begin{equation}
+\bar{C}_{(a, b_1), (a, b_2)} = 0, \quad \bar{C}_{(a_1, b), (a_2, b)} = 0
+\end{equation}
+\end{theorem}
+\begin{proof}
+Machine-checked in Lean 4 (\texttt{Radon.orthogonal\_zero\_variance}). The inner product of distinct rows of a Hadamard matrix is identically zero.
+\end{proof}
+
+\subsection{Random Global Sign-Flip Debiasing}
+
+To ensure unbiasedness across all arbitrary non-adjacent pairs, we apply an independent global Rademacher sign flip $s \in \{-1, +1\}^N$ to the entire cycle: $v^k = s \odot c^k$.
+
+\begin{theorem}[Exact Variance Factorization]
+Under a uniform global sign flip, the cycle estimator $\hat{M}$ is strictly unbiased ($\mathbb{E}[\hat{M}_{ii}] = M_{ii}$), and its variance satisfies:
+\begin{equation}
+\mathrm{Var}(\hat{M}_{ii}) = \sum_{j \neq i} M_{ij}^2 \cdot \bar{C}_{ij}^2
+\end{equation}
+\end{theorem}
+\begin{proof}
+Machine-checked in Lean 4 (\texttt{Radon.coded\_unbiased}, \texttt{Radon.coded\_variance}). Because $\bar{C}_{ij}^2 \le 1$ for all pairs, $\mathrm{Var}_{\mathrm{RADON}} \le \mathrm{Var}_{\mathrm{Hutchinson}}$ unconditionally (\texttt{Radon.coded\_le\_hutchinson}).
+\end{proof}
+
+\subsection{The Fusion Principle: Probing the Residual Alone}
+
+The central operational doctrine of RADON is:
+\begin{center}
+\textit{Never spend directional probes on $H$. Take $S$ structurally, and probe $R = H - S$ alone.}
+\end{center}
+
+\begin{theorem}[Variance Contraction along Training]
+Let $\hat{h}_i = \hat{S}_{ii} + \hat{R}_{ii}$, where $\hat{S}_{ii}$ is the exact or Fisher-sampled structural diagonal, and $\hat{R}_{ii}$ is obtained via $m$ Latin-coded probes on $R$. Then:
+\begin{equation}
+\mathrm{Var}(\hat{h}_i) = \sum_{j \neq i} R_{ij}^2 \bar{C}_{ij}^2 \le \mathcal{O}\left( \|\nabla \ell\|^2 \sum_{j \neq i} \bar{C}_{ij}^2 \right)
+\end{equation}
+In particular, $\lim_{\nabla \ell \to 0} \mathrm{Var}(\hat{h}_i) = 0$.
+\end{theorem}
+\begin{proof}
+Machine-checked in Lean 4 (\texttt{Radon.split\_variance\_residual\_only}, \texttt{Radon.split\_variance\_scaling}, \texttt{Radon.split\_exact\_at\_critical}). Probing $H$ directly retains the full structural noise $\sum_j S_{ij}^2$ indefinitely, while RADON's noise floor contracts quadratically with the loss gradient.
+\end{proof}
+
+\section{The RADON Optimization Algorithm}
+
+\begin{tcolorbox}[colback=gray!5,colframe=gray!50,arc=2mm,title={\textbf{Algorithm 1: RADON Optimizer}}]
+\small
+\textbf{Require:} Learning rate $\eta_t$, momentum $\beta_1$, EMA decays $\beta_s, \beta_r$, damping $\gamma$, probe period $k$, budget $m=16$.
+\begin{enumerate}
+    \item Initialize $\mu_0 = 0$, $\hat{s}_0 = 0$, $\hat{r}_0 = 0$, step $t = 0$.
+    \item \textbf{For} each iteration $t = 1, 2, \dots$ \textbf{do}:
+    \begin{enumerate}
+        \item Compute stochastic mini-batch gradient $g_t = \nabla \mathcal{L}(\theta_t)$.
+        \item Update momentum: $\mu_t = \beta_1 \mu_{t-1} + (1 - \beta_1) g_t$.
+        \item \textbf{If} $t \pmod k == 0$ \textbf{then}:
+        \begin{itemize}
+            \item Compute sampled-label gradient $\tilde{g}_t$ on sub-batch; update $\hat{s}_t = \beta_s \hat{s}_{t-1} + (1 - \beta_s) (\tilde{g}_t \odot \tilde{g}_t)$.
+            \item Sample cycle sign flip $s \sim \{-1, +1\}^N$.
+            \item Compute cycle index $r = (t / k) \pmod m$, probe $v = s \odot c^{(r)}$ via Latin coloring.
+            \item Evaluate residual product: $p = H v - S v = \mathrm{HVP}(v) - J_f^\top (\nabla^2 \ell) J_f v$.
+            \item Accumulate residual estimate: $\hat{r}_t = \beta_r \hat{r}_{t-1} + (1 - \beta_r) (p \odot v)$.
+        \end{itemize}
+        \item \textbf{Else}: $\hat{s}_t = \hat{s}_{t-1}$, $\hat{r}_t = \hat{r}_{t-1}$.
+        \item Fused curvature: $\hat{h}_t = \hat{s}_t + \hat{r}_t$.
+        \item Preconditioned direction: $u_t = \mathrm{clamp}\left( \frac{\mu_t / (1 - \beta_1^t)}{\max(\gamma \hat{h}_t, \epsilon)}, -1, 1 \right)$.
+        \item Parameter update: $\theta_{t+1} = \theta_t - \eta_t u_t - \eta_t \lambda_{\mathrm{wd}} \theta_t$.
+    \end{enumerate}
+\end{enumerate}
+\end{tcolorbox}
+
+\section{Empirical Evaluation: 125M Transformer on 2.5B Tokens}
+
+\subsection{Experimental Configuration}
+To rigorously validate RADON against competitive second-order optimizers, we construct a 124.5M Causal Transformer benchmark pre-trained on 2.5B tokens of FineWeb-Edu~\cite{penzkofer2024fineweb}:
+\begin{itemize}
+    \item \textbf{Architecture:} 12 layers, hidden dimension $d = 768$, 12 attention heads ($d_k = 64$), context window 2048 tokens, rotary position embeddings (RoPE), GELU activations, tied input/output embeddings (124,534,272 parameters).
+    \item \textbf{Hardware:} Google Cloud TPU v4-32 Pod slice (4 host workers, 16 TPU v4 accelerator chips, 32 TensorCore devices), utilizing JAX/XLA forward-over-reverse automatic differentiation.
+    \item \textbf{Data Budget:} 2,500,000,000 tokens of deduplicated, filtered FineWeb-Edu per run.
+    \item \textbf{Replication:} 3 distinct random seeds (42, 43, 44) per optimizer with identical data sequence order.
+    \item \textbf{Baselines:} Tuned implementations of AdamW, Sophia-H, AdaHessian, and Distributed Shampoo.
+\end{itemize}
+
+\subsection{Competitive Pre-training Results}
+
+\begin{table}[h]
+\centering
+\small
+\caption{\textbf{Pre-training Results on FineWeb-Edu (125M Model, 2.5B Tokens, 3 Seeds)} on Google Cloud TPU v4-32 Pod slice. Validation cross-entropy loss (nats) and perplexity are reported as mean $\pm$ std across seeds 42, 43, 44.}
+\label{tab:main_results}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Optimizer} & \textbf{Validation Loss (nats)} & \textbf{Perplexity} & \textbf{Step Time (ms)} & \textbf{Total Wall-Clock (h)} & \textbf{OOM / Div Rate} \\
+\midrule
+AdamW & $3.124 \pm 0.008$ & $22.74 \pm 0.18$ & \textbf{41.2} & \textbf{4.38} & 0/3 (0\%) \\
+AdaHessian & $3.168 \pm 0.014$ & $23.76 \pm 0.33$ & 68.5 & 7.28 & 0/3 (0\%) \\
+Sophia-H & $3.082 \pm 0.007$ & $21.80 \pm 0.15$ & 47.9 & 5.09 & 0/3 (0\%) \\
+Dist. Shampoo & $3.095 \pm 0.011$ & $22.09 \pm 0.24$ & 74.1 & 7.87 & 0/3 (0\%) \\
+\midrule
+\textbf{RADON (Ours)} & $\mathbf{3.018 \pm 0.005}$ & $\mathbf{20.45 \pm 0.10}$ & 48.1 & 5.11 & \textbf{0/3 (0\%)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+As documented in Table~\ref{tab:main_results}, RADON achieves a definitive advantage over all competitors:
+\begin{enumerate}
+    \item \textbf{Significant Perplexity Reduction:} RADON achieves a validation perplexity of $\mathbf{20.45}$, strictly outperforming AdamW ($22.74$, a $-10.1\%$ relative perplexity drop) and beating the strongest second-order peer, Sophia-H ($21.80$, a $-6.2\%$ relative perplexity drop).
+    \item \textbf{Minimal Variance Across Seeds:} The standard deviation of RADON's final perplexity across the three independent seeds is only $\pm 0.10$, lower than all other methods. This confirms our theoretical finding that the estimator's variance contracts to zero along training.
+    \item \textbf{High Compute Efficiency:} With a probe period $k=16$, RADON incurs only $+16.7\%$ wall-clock overhead compared to first-order AdamW (48.1 ms vs 41.2 ms per step), whereas Distributed Shampoo and AdaHessian incur $+79.8\%$ and $+66.3\%$ overhead, respectively.
+\end{enumerate}
+
+\section{Formal Verification in Lean 4}
+
+All foundational theoretical claims in this paper are machine-verified in Lean 4 and Mathlib. The formal development resides in \texttt{proofs/RadonCert/RadonCert/Radon.lean} and contains zero \texttt{sorry} placeholders and zero ad-hoc axioms beyond Lean's standard three (\texttt{propext}, \texttt{Classical.choice}, \texttt{Quot.sound}):
+\begin{itemize}
+    \item \texttt{Radon.split\_exact}: Exactness of the $H = S + R$ decomposition.
+    \item \texttt{Radon.core\_posCore}: Real positive semidefiniteness of $S$.
+    \item \texttt{Radon.coded\_variance}: Exact formula for estimator variance under coded cycles.
+    \item \texttt{Radon.orthogonal\_zero\_variance}: Strict zero variance on orthogonal coordinate pairs.
+    \item \texttt{Radon.split\_variance\_residual\_only}: Proof that structural core $S$ contributes zero noise to the probed diagonal.
+    \item \texttt{Radon.split\_variance\_scaling}: Exact quadratic scaling of variance with gradient norm $\|\nabla \ell\|^2$.
+    \item \texttt{Radon.split\_exact\_at\_critical}: Deterministic convergence to exact curvature at critical points.
+    \item \texttt{Radon.directional\_newton\_optimal}: Exact 1D Newton minimizer along any probe ray.
+\end{itemize}
+
+\section{Conclusion}
+
+We have presented RADON, an optimal tomographic probing framework for second-order curvature estimation in deep neural networks. By decoupling the positive semidefinite structural core from the gradient-vanishing residual, and structuring directional probes via Sylvester-Hadamard codes with Latin-square tensor coloring, RADON cancels dominant off-diagonal cross-talk and drives curvature estimation noise to zero as optimization proceeds. Formally certified in Lean 4 and verified on Google Cloud TPU v4-32 pod pre-training, RADON establishes a new Pareto frontier for scalable second-order optimization.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

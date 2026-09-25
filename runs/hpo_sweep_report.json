@@ -1,0 +1,32 @@
+{
+  "radon": {
+    "optimal_lr": 0.0004,
+    "initial_loss": 10.863279342651367,
+    "final_loss": 9.554159164428711,
+    "min_loss": 9.414200782775879
+  },
+  "adamw": {
+    "optimal_lr": 0.001,
+    "initial_loss": 10.863279342651367,
+    "final_loss": 8.731706619262695,
+    "min_loss": 8.274900436401367
+  },
+  "sophia": {
+    "optimal_lr": 0.0006,
+    "initial_loss": 10.863279342651367,
+    "final_loss": 9.072622299194336,
+    "min_loss": 8.85057544708252
+  },
+  "adahessian": {
+    "optimal_lr": 0.001,
+    "initial_loss": 10.863279342651367,
+    "final_loss": NaN,
+    "min_loss": 10.691781044006348
+  },
+  "shampoo": {
+    "optimal_lr": 0.001,
+    "initial_loss": 10.863279342651367,
+    "final_loss": 10.781457901000977,
+    "min_loss": 10.75009822845459
+  }
+}

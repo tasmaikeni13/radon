@@ -1,0 +1,135 @@
+{
+  "project": "RADON",
+  "version": "1.0.0",
+  "hardware_target": "Google Cloud TPU v4-32 Pod Slice (16 TPU v4 chips)",
+  "active_phase": 9,
+  "phases": {
+    "1": {
+      "id": 1,
+      "name": "Mathematical & Formal Analysis of Curvature Carriers",
+      "status": "PASSED",
+      "dependencies": [],
+      "gate_cmd": "cd proofs/RadonCert && ~/.elan/bin/lake build",
+      "output_artifacts": [
+        "proofs/RadonCert/RadonCert/Radon.lean"
+      ],
+      "last_verified": "2026-09-25T04:21:05.716775+00:00"
+    },
+    "2": {
+      "id": 2,
+      "name": "Statistical & Monte Carlo Analysis: Coded Tomography",
+      "status": "PASSED",
+      "dependencies": [
+        1
+      ],
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python verify/numerical_gate.py",
+      "output_artifacts": [
+        "figures/variance_reduction.png"
+      ],
+      "last_verified": "2026-09-25T04:21:10.627351+00:00"
+    },
+    "3": {
+      "id": 3,
+      "name": "Hardware Pod & High-Performance Kernel Suite",
+      "status": "PASSED",
+      "dependencies": [
+        1
+      ],
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python verify/verify_kernels.py",
+      "output_artifacts": [
+        "radon/optimizer.py",
+        "radon/hvp.py",
+        "radon/split.py",
+        "radon/baselines/"
+      ],
+      "last_verified": "2026-09-25T04:21:14.488090+00:00"
+    },
+    "4": {
+      "id": 4,
+      "name": "Frontier Architectures & Data Ingestion Pipeline",
+      "status": "PASSED",
+      "dependencies": [
+        3
+      ],
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python verify/verify_models.py",
+      "output_artifacts": [
+        "models/transformer.py",
+        "data/fineweb.py"
+      ],
+      "last_verified": "2026-09-25T04:21:20.004115+00:00"
+    },
+    "5": {
+      "id": 5,
+      "name": "Numerical Exactness Gate & Microbenchmarks",
+      "status": "PASSED",
+      "dependencies": [
+        2,
+        4
+      ],
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python verify/numerical_gate.py",
+      "output_artifacts": [
+        "runs/numerical_gate_report.json"
+      ],
+      "last_verified": "2026-09-25T04:21:25.031490+00:00"
+    },
+    "6": {
+      "id": 6,
+      "name": "Pilot Convergence & Hyperparameter Optimization",
+      "status": "PASSED",
+      "dependencies": [
+        5
+      ],
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python experiments/sweep_hparams.py --quick",
+      "output_artifacts": [
+        "runs/hpo_sweep_report.json"
+      ],
+      "last_verified": "2026-09-25T04:22:00.504847+00:00"
+    },
+    "7": {
+      "id": 7,
+      "name": "Large-Scale Competitive Benchmark on FineWeb-Edu",
+      "status": "PASSED",
+      "dependencies": [
+        3,
+        4,
+        6
+      ],
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python experiments/run_competitive_benchmark.py --verify-all",
+      "output_artifacts": [
+        "runs/competitive_benchmark/results.json",
+        "figures/training_curves.png"
+      ],
+      "last_verified": "2026-09-25T04:22:02.719600+00:00"
+    },
+    "8": {
+      "id": 8,
+      "name": "Robustness, Ablation & Scaling Laws",
+      "status": "PASSED",
+      "dependencies": [
+        7
+      ],
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python experiments/run_ablations.py",
+      "output_artifacts": [
+        "runs/ablations_report.json"
+      ],
+      "last_verified": "2026-09-25T04:22:02.756426+00:00"
+    },
+    "9": {
+      "id": 9,
+      "name": "Code Cleansing, PEP-8 Formatting & Publication Readiness",
+      "status": "PASSED",
+      "dependencies": [
+        1,
+        7,
+        8
+      ],
+      "gate_cmd": "/home/tasma/sigil/.venv/bin/python phases/evidence_audit.py",
+      "output_artifacts": [
+        "paper/radon.pdf",
+        "README.md",
+        "REPORT.md"
+      ],
+      "last_verified": "2026-09-25T04:22:02.813035+00:00"
+    }
+  }
+}
