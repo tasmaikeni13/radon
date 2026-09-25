@@ -1,6 +1,6 @@
 # Autonomous & Adaptive Research Execution Protocol: RADON
 
-Welcome to the **RADON** (**Resonant Adaptive Directional Operator for Neural Curvature**) autonomous research framework. This directory defines the operational architecture, formal protocols, and phase-by-phase execution guide for autonomous AI research agents and human investigators.
+Welcome to the **RADON** (**Residual-aware Antithetic Decoupled Orthogonal Newton Optimizer**) autonomous research framework. This directory defines the operational architecture, formal protocols, and phase-by-phase execution guide for autonomous AI research agents and human investigators.
 
 The overarching goal is to achieve, formally certify, empirically prove, and publish the unconditional superiority of RADON over all peer second-order curvature-aware optimization and probing methods on hardware accelerators (specifically Google Cloud TPU v4 Pod slices).
 
