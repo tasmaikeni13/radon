@@ -58,10 +58,11 @@ python3 -m verify.verify_kernels
 python3 -m verify.verify_models
 
 # --- Autonomous Research Phases & Adaptive Cascades ---
+# Current Status: All 9 phases are primed in PENDING state for sequential execution.
 python3 phases/run_phase.py --status             # Inspect phase execution states & dependency graph
-python3 phases/run_phase.py --phase <N>          # Execute & verify specific phase (1-9)
+python3 phases/run_phase.py --phase <N>          # Execute & verify specific phase sequentially (1-9)
 python3 phases/run_phase.py --all                # Verify full end-to-end research phase pipeline
-python3 phases/evidence_audit.py                 # Audit empirical evidence JSONs & certificates
+python3 phases/evidence_audit.py                 # Audit empirical evidence JSONs & certificates (Phase 9)
 
 # --- Lean 4 Formal Verification ---
 cd proofs/RadonCert && ~/.elan/bin/lake build    # Compile & machine-check all formal theorems (0 sorry)

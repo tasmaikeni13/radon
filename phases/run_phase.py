@@ -76,6 +76,9 @@ def cascade_invalidation(phase_id: int, state: dict[str, Any]) -> list[int]:
 
 
 def run_gate(gate_cmd: str) -> bool:
+    if gate_cmd.startswith("python3 ") or gate_cmd.startswith("python "):
+        cmd_parts = gate_cmd.split(" ", 1)
+        gate_cmd = f"{sys.executable} {cmd_parts[1]}"
     print(f"\n[EXEC] Running verification gate: {gate_cmd}")
     try:
         proc = subprocess.run(

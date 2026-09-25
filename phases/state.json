@@ -2,134 +2,134 @@
   "project": "RADON",
   "version": "1.0.0",
   "hardware_target": "Google Cloud TPU v4-32 Pod Slice (16 TPU v4 chips)",
-  "active_phase": 9,
+  "active_phase": 1,
   "phases": {
     "1": {
       "id": 1,
       "name": "Mathematical & Formal Analysis of Curvature Carriers",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [],
       "gate_cmd": "cd proofs/RadonCert && ~/.elan/bin/lake build",
       "output_artifacts": [
         "proofs/RadonCert/RadonCert/Radon.lean"
       ],
-      "last_verified": "2026-09-25T04:36:33.120876+00:00"
+      "last_verified": null
     },
     "2": {
       "id": 2,
       "name": "Statistical & Monte Carlo Analysis: Coded Tomography",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [
         1
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python verify/numerical_gate.py",
+      "gate_cmd": "python3 verify/numerical_gate.py",
       "output_artifacts": [
         "figures/variance_reduction.png"
       ],
-      "last_verified": "2026-09-25T04:36:38.185725+00:00"
+      "last_verified": null
     },
     "3": {
       "id": 3,
       "name": "Hardware Pod & High-Performance Kernel Suite",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [
         1
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python verify/verify_kernels.py",
+      "gate_cmd": "python3 verify/verify_kernels.py",
       "output_artifacts": [
         "radon/optimizer.py",
         "radon/hvp.py",
         "radon/split.py",
         "radon/baselines/"
       ],
-      "last_verified": "2026-09-25T04:36:41.937165+00:00"
+      "last_verified": null
     },
     "4": {
       "id": 4,
       "name": "Frontier Architectures & Data Ingestion Pipeline",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [
         3
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python verify/verify_models.py",
+      "gate_cmd": "python3 verify/verify_models.py",
       "output_artifacts": [
         "models/transformer.py",
         "data/fineweb.py"
       ],
-      "last_verified": "2026-09-25T04:36:47.555973+00:00"
+      "last_verified": null
     },
     "5": {
       "id": 5,
       "name": "Numerical Exactness Gate & Microbenchmarks",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [
         2,
         4
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python verify/numerical_gate.py",
+      "gate_cmd": "python3 verify/numerical_gate.py",
       "output_artifacts": [
         "runs/numerical_gate_report.json"
       ],
-      "last_verified": "2026-09-25T04:36:53.029804+00:00"
+      "last_verified": null
     },
     "6": {
       "id": 6,
       "name": "Hyperparameter Sweep for 3 Seeds (125M on 600M FineWeb-Edu for 2.5k Steps per Optimizer)",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [
         5
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python experiments/sweep_hparams.py --smoke",
+      "gate_cmd": "python3 experiments/sweep_hparams.py --smoke",
       "output_artifacts": [
         "runs/hpo_sweep_report.json"
       ],
-      "last_verified": "2026-09-25T04:37:31.250650+00:00"
+      "last_verified": null
     },
     "7": {
       "id": 7,
       "name": "Large-Scale Competitive Benchmark on FineWeb-Edu",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [
         3,
         4,
         6
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python experiments/run_competitive_benchmark.py --verify-all",
+      "gate_cmd": "python3 experiments/run_competitive_benchmark.py --verify-all",
       "output_artifacts": [
         "runs/competitive_benchmark/results.json",
         "figures/training_curves.png"
       ],
-      "last_verified": "2026-09-25T04:37:31.295218+00:00"
+      "last_verified": null
     },
     "8": {
       "id": 8,
       "name": "Robustness, Ablation & Scaling Laws",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [
         7
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python experiments/run_ablations.py",
+      "gate_cmd": "python3 experiments/run_ablations.py",
       "output_artifacts": [
         "runs/ablations_report.json"
       ],
-      "last_verified": "2026-09-25T04:37:31.333532+00:00"
+      "last_verified": null
     },
     "9": {
       "id": 9,
       "name": "Code Cleansing, PEP-8 Formatting & Publication Readiness",
-      "status": "PASSED",
+      "status": "PENDING",
       "dependencies": [
         1,
         7,
         8
       ],
-      "gate_cmd": "/home/tasma/sigil/.venv/bin/python phases/evidence_audit.py",
+      "gate_cmd": "python3 phases/evidence_audit.py",
       "output_artifacts": [
         "paper/radon.pdf",
         "README.md",
         "REPORT.md"
       ],
-      "last_verified": "2026-09-25T04:37:31.394377+00:00"
+      "last_verified": null
     }
   }
 }

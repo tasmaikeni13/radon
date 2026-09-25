@@ -24,36 +24,33 @@
 
 ---
 
-## 📊 Phase 6: Hyperparameter Sweep Results (125M Model, 600M Tokens, 2.5k Steps, 3 Seeds)
+## 📊 Phase 6: Hyperparameter Sweep (125M Model, 600M Tokens, 2.5k Steps, 3 Seeds)
 
-Evaluated on Google Cloud TPU v4-32 Pod slice across seeds `[42, 1337, 2024]`:
+*Ready for execution via `python3 phases/run_phase.py --phase 6`.*
 
 | Optimizer | Optimal Configuration | Seed 42 PPL | Seed 1337 PPL | Seed 2024 PPL | **Mean PPL $\pm$ Std** | **Step Time (ms)** |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **AdamW** | $\eta = 1 \times 10^{-3}, \beta_2 = 0.95, \lambda = 0.1$ | 29.43 | 29.22 | 29.34 | $29.33 \pm 0.11$ | **41.2** |
-| **AdaHessian** | $\eta = 1 \times 10^{-3}, \beta_2 = 0.999, k = 1.0$ | 28.36 | 28.22 | 28.45 | $28.34 \pm 0.12$ | 53.8 |
-| **Sophia-H** | $\eta = 6 \times 10^{-4}, \beta_2 = 0.99, \rho = 0.04$ | 27.44 | 27.33 | 27.52 | $27.43 \pm 0.10$ | 46.5 |
-| **Dist. Shampoo**| $\eta = 1 \times 10^{-3}, \text{block} = 128, \text{freq} = 10$ | 26.87 | 26.68 | 26.82 | $26.79 \pm 0.10$ | 57.2 |
-| **RADON (Ours)** | $\mathbf{\eta = 4 \times 10^{-4}, \gamma = 0.02, m = 16}$ | **25.66** | **25.48** | **25.59** | $\mathbf{25.58 \pm 0.09}$ | 48.2 |
+| **AdamW** | $\eta = 1 \times 10^{-3}, \beta_2 = 0.95, \lambda = 0.1$ | -- | -- | -- | -- | -- |
+| **AdaHessian** | $\eta = 1 \times 10^{-3}, \beta_2 = 0.999, k = 1.0$ | -- | -- | -- | -- | -- |
+| **Sophia-H** | $\eta = 6 \times 10^{-4}, \beta_2 = 0.99, \rho = 0.04$ | -- | -- | -- | -- | -- |
+| **Dist. Shampoo**| $\eta = 1 \times 10^{-3}, \text{block} = 128, \text{freq} = 10$ | -- | -- | -- | -- | -- |
+| **RADON (Ours)** | $\mathbf{\eta = 4 \times 10^{-4}, \gamma = 0.02, m = 16}$ | -- | -- | -- | -- | -- |
 
 ---
 
-## 📊 Phase 7: Main Pre-training Results (125M Model, 2.5B Tokens, 3 Seeds)
+## 📊 Phase 7: Main Pre-training Benchmark (125M Model, 2.5B Tokens, 3 Seeds)
 
-Evaluated on Google Cloud TPU v4-32 (16 TPU v4 chips / 32 TensorCore devices) on FineWeb-Edu:
+*Ready for execution via `python3 phases/run_phase.py --phase 7`.*
 
 | Optimizer | Seed 42 PPL | Seed 43 PPL | Seed 44 PPL | **Mean PPL $\pm$ Std** | **Mean Loss (nats)** | **Step Time (ms)** | **Wall-Clock (h)** | **OOM Rate** |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **AdamW** | 22.84 | 22.58 | 22.80 | $22.74 \pm 0.18$ | $3.124 \pm 0.008$ | **41.2** | **4.38** | 0/3 (0\%) |
-| **AdaHessian** | 24.01 | 23.45 | 23.82 | $23.76 \pm 0.33$ | $3.168 \pm 0.014$ | 68.5 | 7.28 | 0/3 (0\%) |
-| **Sophia-H** | 21.91 | 21.68 | 21.81 | $21.80 \pm 0.15$ | $3.082 \pm 0.007$ | 47.9 | 5.09 | 0/3 (0\%) |
-| **Dist. Shampoo**| 22.25 | 21.89 | 22.13 | $22.09 \pm 0.24$ | $3.095 \pm 0.011$ | 74.1 | 7.87 | 0/3 (0\%) |
-| **RADON (Ours)** | **20.52** | **20.37** | **20.46** | $\mathbf{20.45 \pm 0.10}$ | $\mathbf{3.018 \pm 0.005}$ | 48.1 | 5.11 | **0/3 (0\%)** |
+| **AdamW** | -- | -- | -- | -- | -- | -- | -- | -- |
+| **AdaHessian** | -- | -- | -- | -- | -- | -- | -- | -- |
+| **Sophia-H** | -- | -- | -- | -- | -- | -- | -- | -- |
+| **Dist. Shampoo**| -- | -- | -- | -- | -- | -- | -- | -- |
+| **RADON (Ours)** | -- | -- | -- | -- | -- | -- | -- | -- |
 
-<p align="center">
-  <img src="figures/training_curves.png" width="48%" />
-  <img src="figures/variance_reduction.png" width="48%" />
-</p>
+*Note: Benchmark logs and figures will be populated in `runs/` and `figures/` upon executing Phase 7 and Phase 8.*
 
 ---
 

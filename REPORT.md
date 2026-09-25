@@ -32,20 +32,15 @@ $$\text{Given a budget of } m \ll N \text{ directional Hessian projections, how 
 
 ## 3. Head-to-Head Competitive Results (FineWeb-Edu, 125M Model, 2.5B Tokens)
 
-All optimizers share identical initialization seeds, data sequence orders, warmup schedules, and evaluation checkpoints.
+*Results table template. Will be populated upon execution of Phase 7 via `python3 phases/run_phase.py --phase 7`.*
 
 | Optimizer | Seed 42 PPL | Seed 43 PPL | Seed 44 PPL | **Mean PPL $\pm$ Std** | **Mean Loss (nats)** | **Step Time (ms)** | **Overhead vs AdamW** | **OOM Rate** |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **AdamW** | 22.84 | 22.58 | 22.80 | $22.74 \pm 0.18$ | $3.124 \pm 0.008$ | **41.2** | --- | 0/3 (0\%) |
-| **AdaHessian** | 24.01 | 23.45 | 23.82 | $23.76 \pm 0.33$ | $3.168 \pm 0.014$ | 68.5 | +66.3\% | 0/3 (0\%) |
-| **Sophia-H** | 21.91 | 21.68 | 21.81 | $21.80 \pm 0.15$ | $3.082 \pm 0.007$ | 47.9 | +16.3\% | 0/3 (0\%) |
-| **Dist. Shampoo**| 22.25 | 21.89 | 22.13 | $22.09 \pm 0.24$ | $3.095 \pm 0.011$ | 74.1 | +79.8\% | 0/3 (0\%) |
-| **RADON (Ours)** | **20.52** | **20.37** | **20.46** | $\mathbf{20.45 \pm 0.10}$ | $\mathbf{3.018 \pm 0.005}$ | 48.1 | **+16.7\%** | **0/3 (0\%)** |
-
-### Key Benchmark Takeaways
-- **Perplexity Breakthrough:** RADON achieves **20.45 perplexity**, outperforming tuned AdamW by **-2.29 perplexity points (-10.1% relative drop)** and beating the strongest second-order peer (Sophia-H) by **-1.35 perplexity points (-6.2% relative drop)**.
-- **Superior Stability Across Seeds:** RADON's standard deviation across 3 seeds is only **$\pm 0.10$**, significantly lower than AdamW ($\pm 0.18$) and AdaHessian ($\pm 0.33$). This validates the mathematical proof that residual estimation noise contracts along the optimization path.
-- **Minimal Hardware Overhead:** RADON requires only **48.1 ms per step** (+16.7% over first-order AdamW), compared to 68.5 ms for AdaHessian (+66.3%) and 74.1 ms for Distributed Shampoo (+79.8%).
+| **AdamW** | -- | -- | -- | -- | -- | -- | --- | -- |
+| **AdaHessian** | -- | -- | -- | -- | -- | -- | -- | -- |
+| **Sophia-H** | -- | -- | -- | -- | -- | -- | -- | -- |
+| **Dist. Shampoo**| -- | -- | -- | -- | -- | -- | -- | -- |
+| **RADON (Ours)** | -- | -- | -- | -- | -- | -- | -- | -- |
 
 ---
 
