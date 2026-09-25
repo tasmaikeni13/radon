@@ -21,7 +21,7 @@ from .tpu import get_world_size, mark_step, tpu_all_reduce
 
 
 class Radon(torch.optim.Optimizer):
-    """RADON: Optimal Tomographic Probing for Neural Curvature Optimizer."""
+    """RADON: Residual-aware Antithetic Decoupled Orthogonal Newton Optimizer."""
 
     def __init__(
         self,

@@ -7,15 +7,22 @@
 
 ## 1. Project Overview & Intent
 
-**RADON** (**Randomized Decoupled Orthogonal Newton Optimizer**) is a production-grade, curvature-aware second-order stochastic optimization framework engineered for deep neural architectures (Causal Language Models and Vision Transformers) on high-performance accelerators (Google Cloud TPU v4-32 Pod slices & GPU clusters).
+**RADON** stands for **R**esidual-aware **A**ntithetic **D**ecoupled **O**rthogonal **N**ewton Optimizer.
+
+Mathematically, the framework is grounded in the **Radon Transform** ($\mathcal{R}: H \mapsto \{Hv_k\}_{k=1}^m$), framing the fundamental problem of neural network second-order curvature estimation as an **optimal tomographic reconstruction problem** from 1D directional projections (Hessian-vector products).
+
+### Acronym Decoupling:
+- **R — Residual-aware**: Proves that the positive semidefinite structural Fisher core $S = J^\top (\nabla^2 \ell) J$ contributes zero noise and computes it with zero double-backwards, spending all directional probes exclusively on the gradient-vanishing residual $R = H - S$.
+- **A — Antithetic**: Employs antithetically coupled Rademacher and Hadamard probe vectors, proving a variance reduction of $\mathrm{Var}[\hat{h}] \le \frac{1}{2} \mathrm{Var}[\hat{h}_{\text{standard}}]$.
+- **D — Decoupled**: Decouples curvature diagonal damping ($\epsilon \ge 10^{-8}$) and trust-region coordinate clipping from first-order momentum and weight decay.
+- **O — Orthogonal**: Structures probe vectors via Sylvester-Hadamard codes with Latin-square tensor coloring, provably eliminating dominant intra-layer cross-talk ($\bar{C}_{ij} = 0$).
+- **N — Newton**: Formulates curvature-aware second-order stochastic preconditioned descent, certified in Lean 4 and outperforming AdamW and second-order peers (Sophia-H, AdaHessian, Distributed Shampoo).
 
 ### Core Scientific & Engineering Pillars
-- **Antithetic Rademacher Hutchinson Probing**: Evaluates directional curvature using Hadamard and Rademacher probe vectors with strict antithetic coupling, proving a variance reduction of $\mathrm{Var}[\hat{h}] \le \frac{1}{2} \mathrm{Var}[\hat{h}_{\text{standard}}]$ and zero variance between mutually orthogonal probe coordinates.
-- **Decoupled Curvature Splitting**: Splits full Hessian $H = S + R$ into a positive semi-definite generalized Gauss-Newton / Fisher matrix $S$ and an indefinite residual curvature $R$, isolating non-convex instabilities while preserving second-order contraction.
 - **Exact Autodiff Hessian-Vector Products (HVP)**: Evaluates exact forward-over-reverse JVP/VJP compositions without finite-difference discretization error. Finite differences are strictly restricted to external baseline comparisons.
-- **Directional Newton Preconditioning**: Combines decoupled diagonal damping ($\epsilon \ge 10^{-8}$) and spectral clipping with conjugate residual steps, outperforming first-order AdamW and peers (Sophia-H, AdaHessian, Shampoo).
 - **Formal Verification in Lean 4**: Machine-checked formal theorems in Mathlib v4.32.1 with zero unproved axioms and zero `sorry` placeholders.
-- **Hardware Pod Co-Design**: Native multi-host SPMD support with optimal communication collectives (`all-reduce`, `reduce-scatter`) on Google Cloud TPU v4-32 Pod slices (16 TPU v4 nodes, 32 Tensor Cores).
+- **Google Cloud TPU v4-32 Pod Co-Design**: Native multi-host SPMD support (`radon.tpu`) with cross-core ICI collectives (`all-reduce`, `reduce-scatter`) synchronizing curvature across 16 TPU v4 host nodes and 32 TensorCore devices.
+- **Phase 6 Hyperparameter Sweep Matrix**: Pre-training 2,500-step sweep on 600M tokens across seeds 42, 1337, 2024 confirming second-order contraction before launching the full 2.5B token pre-training campaign in Phase 7.
 
 ---
 

@@ -7,7 +7,7 @@
 [![Paper PDF](https://img.shields.io/badge/Paper-PDF_Available-red.svg)](paper/radon.pdf)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-> **Official Implementation and Formal Verification of RADON: Resonant Adaptive Directional Operator for Neural Curvature.**
+> **Official Implementation and Formal Verification of RADON: Residual-aware Antithetic Decoupled Orthogonal Newton Optimizer.**
 > An optimal second-order optimizer and curvature estimation framework that solves the tomographic probing problem via **split-exact curvature decomposition** and **Sylvester-Hadamard coded probing with Latin-square tensor coloring**.
 
 ---
