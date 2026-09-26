@@ -1,6 +1,7 @@
 """Verification suite for all optimizer kernels (RADON and peer baselines)."""
 
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import torch
@@ -10,11 +11,12 @@ from torch import nn
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from radon.adaptive import AdaptiveProbeConfig, adaptive_residual_diagonal
 from radon.baselines import AdaHessian, AdamWBaseline, Shampoo, SophiaH
 from radon.baselines.curvature import hutchinson_diag_sample
 from radon.optimizer import Radon
 from radon.probes import ProbeGenerator
-from radon.split import fisher_diag_sample, residual_probe
+from radon.split import fisher_diag_sample, residual_hvp, residual_probe
 from radon.tpu import (
     get_device,
     get_tpu_config,
@@ -130,6 +132,35 @@ def test_radon_pipeline():
     return True
 
 
+def test_adaptive_radon_pipeline():
+    """Exercise learned directions and variable probe count through exact autodiff."""
+    torch.manual_seed(43)
+    model = SimpleNet()
+    inputs = torch.randn(4, 16)
+    targets = torch.randint(0, 8, (4,))
+    params = list(model.parameters())
+    optimizer = Radon(params, lr=1e-3, gamma=0.02, cycle_m=1)
+    F.cross_entropy(model(inputs), targets).backward()
+    optimizer.accumulate_core(fisher_diag_sample(model, params, inputs))
+    def matvec(vectors: Sequence[torch.Tensor]) -> list[torch.Tensor]:
+        return residual_hvp(
+            model, params, inputs,
+            lambda logits: F.cross_entropy(logits, targets), vectors,
+        )
+    estimate = adaptive_residual_diagonal(
+        matvec, params,
+        AdaptiveProbeConfig(target_relative_rms=0.25, max_final_probes=2),
+        seed=43,
+    )
+    assert 4 <= estimate.hvp_calls <= 6
+    assert all(torch.isfinite(item).all() for item in estimate.diagonal)
+    optimizer.accumulate_residual(list(zip(params, estimate.diagonal)))
+    optimizer.step()
+    assert optimizer.n_commits == 1
+    print(f"  {'Adaptive RADON':<20s} Exact residual HVP calls: {estimate.hvp_calls}")
+    return True
+
+
 def main():
     print("=" * 80)
     print("  RADON Kernel & Peer Optimizer Verification Suite")
@@ -137,6 +168,7 @@ def main():
 
     test_tpu_pod_abstractions()
     test_radon_pipeline()
+    test_adaptive_radon_pipeline()
     test_optimizer("AdamWBaseline", lambda m: AdamWBaseline(m.parameters(), lr=1e-3))
     test_optimizer("SophiaH", lambda m: SophiaH(m.parameters(), lr=1e-3))
     test_optimizer("AdaHessian", lambda m: AdaHessian(m.parameters(), lr=1e-3))

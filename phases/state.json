@@ -11,7 +11,8 @@
       "dependencies": [],
       "gate_cmd": "cd proofs/RadonCert && ~/.elan/bin/lake build",
       "output_artifacts": [
-        "proofs/RadonCert/RadonCert/Radon.lean"
+        "proofs/RadonCert/RadonCert/Radon.lean",
+        "proofs/RadonCert/RadonCert/Adaptive.lean"
       ],
       "last_verified": "2026-09-26T03:43:44.019499+00:00"
     },
@@ -23,7 +24,9 @@
         1
       ],
       "gate_cmd": "python3 verify/numerical_gate.py",
-      "output_artifacts": [],
+      "output_artifacts": [
+        "experiments/monte_carlo_adaptive.py"
+      ],
       "last_verified": "2026-09-26T03:43:49.019530+00:00"
     },
     "3": {
@@ -38,6 +41,7 @@
         "radon/optimizer.py",
         "radon/hvp.py",
         "radon/split.py",
+        "radon/adaptive.py",
         "radon/baselines/"
       ],
       "last_verified": "2026-09-26T03:43:53.178428+00:00"

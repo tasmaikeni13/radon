@@ -35,7 +35,8 @@ OUTPUT_DIR = REPO_ROOT / "runs" / "phase8"
 REPORT_PATH = REPO_ROOT / "runs" / "ablations_report.json"
 VARIANTS = (
     "cycle_m2", "cycle_m4", "cycle_m8", "cycle_m16", "cycle_m32",
-    "isotropic", "full_hessian",
+    "isotropic", "full_hessian", "adaptive_projection",
+    "fixed_rademacher_4", "fixed_rademacher_8",
 )
 
 
@@ -50,6 +51,15 @@ def variant_config(name: str, base_hp: dict[str, Any]) -> tuple[dict[str, Any], 
     if name == "full_hessian":
         hp["cycle_m"] = 16
         return hp, "full_hessian"
+    if name == "adaptive_projection":
+        hp.update({
+            "cycle_m": 1, "adaptive_target": 0.25,
+            "adaptive_min_probes": 1, "adaptive_max_probes": 4,
+        })
+        return hp, "adaptive_projection"
+    if name.startswith("fixed_rademacher_"):
+        hp.update({"cycle_m": 1, "probe_count": int(name.removeprefix("fixed_rademacher_"))})
+        return hp, "fixed_rademacher"
     raise ValueError(f"Unknown ablation: {name}")
 
 
@@ -83,7 +93,10 @@ def run_smoke(steps: int) -> None:
     device = get_device()
     world_size = get_world_size()
     base_hp = SMOKE_CONFIGS["radon"]
-    for name in ("cycle_m2", "cycle_m4", "cycle_m16", "isotropic", "full_hessian"):
+    for name in (
+        "cycle_m2", "cycle_m4", "cycle_m16", "isotropic",
+        "full_hessian", "adaptive_projection", "fixed_rademacher_4",
+    ):
         hp, variant = variant_config(name, base_hp)
         spec = TrainSpec(
             optimizer="radon", seed=42, hyperparameters=hp,
@@ -119,7 +132,22 @@ def compile_report(base_hp: dict[str, Any], steps: int) -> bool:
             "mean_val_ppl": mean(run["val_ppl"] for run in runs),
             "std_val_ppl": stdev(run["val_ppl"] for run in runs),
             "mean_step_time_ms": mean(run["mean_step_time_ms"] for run in runs),
-            "hvp_calls_per_rank": runs[0]["hvp_calls_per_rank"],
+            "mean_hvp_calls_per_rank": mean(run["hvp_calls_per_rank"] for run in runs),
+            "hvp_calls_per_rank_by_seed": [run["hvp_calls_per_rank"] for run in runs],
+            "mean_hvp_calls_across_ranks": mean(run["hvp_calls_mean_per_rank"] for run in runs),
+            "max_hvp_calls_per_rank": max(run["hvp_calls_max_per_rank"] for run in runs),
+            "mean_adaptive_final_probes": (
+                mean(
+                    decision["final_probes"]
+                    for run in runs for decision in run["adaptive_decisions"]
+                ) if variant == "adaptive_projection" else None
+            ),
+            "adaptive_projection_fraction": (
+                mean(
+                    decision["projection_rank"]
+                    for run in runs for decision in run["adaptive_decisions"]
+                ) if variant == "adaptive_projection" else None
+            ),
             "raw_files": [str(raw_path(name, seed).relative_to(REPO_ROOT)) for seed in SEEDS],
         }
     report = {

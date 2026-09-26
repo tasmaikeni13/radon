@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -14,12 +15,17 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from data.fineweb import FineWebDataset
 from models.transformer import CausalTransformer, TransformerConfig
+from radon.adaptive import (
+    AdaptiveProbeConfig,
+    adaptive_residual_diagonal,
+    fixed_rademacher_diagonal,
+)
 from radon.baselines import AdaHessian, AdamWBaseline, Shampoo, SophiaH
 from radon.baselines.curvature import hutchinson_diag_sample
 from radon.hvp import torch_hvp
 from radon.optimizer import Radon
 from radon.probes import ProbeGenerator, flip_signs
-from radon.split import fisher_diag_sample, residual_probe
+from radon.split import fisher_diag_sample, residual_hvp, residual_probe
 from radon.tpu import (
     get_device,
     get_rank,
@@ -96,6 +102,8 @@ def build_optimizer(
     name = spec.optimizer
     if name == "radon":
         cycle_m = int(hp.get("cycle_m", 16))
+        if spec.variant in {"adaptive_projection", "fixed_rademacher"} and cycle_m != 1:
+            raise ValueError("complete per-step residual estimates require cycle_m=1")
         optimizer = Radon(
             params,
             lr=float(hp["lr"]),
@@ -105,7 +113,10 @@ def build_optimizer(
             beta_core=float(hp.get("beta_core", 0.95)),
             weight_decay=float(hp.get("weight_decay", 0.1)),
         )
-        return optimizer, ProbeGenerator(params, m=cycle_m, seed=spec.seed)
+        prober = None if spec.variant in {"adaptive_projection", "fixed_rademacher"} else ProbeGenerator(
+            params, m=cycle_m, seed=spec.seed
+        )
+        return optimizer, prober
     if name == "adamw":
         return AdamWBaseline(
             params, lr=float(hp["lr"]),
@@ -145,18 +156,56 @@ def _update_curvature(
     inputs: torch.Tensor,
     targets: torch.Tensor,
     step: int,
-) -> int:
-    """Update curvature and return the number of HVP calls on this rank."""
+) -> tuple[int, dict[str, int] | None]:
+    """Update curvature and return HVP calls plus any adaptive decision."""
     frequency = int(spec.hyperparameters.get("probe_freq", 4))
     if frequency < 1:
         raise ValueError("probe_freq must be positive")
     if step % frequency:
-        return 0
+        return 0, None
     if spec.optimizer == "radon":
-        assert isinstance(optimizer, Radon) and prober is not None
+        assert isinstance(optimizer, Radon)
         probe_index = step // frequency
         if spec.variant != "full_hessian":
             optimizer.accumulate_core(fisher_diag_sample(model, params, inputs))
+        if spec.variant in {"adaptive_projection", "fixed_rademacher"}:
+            def loss_from_logits(logits: torch.Tensor) -> torch.Tensor:
+                return F.cross_entropy(
+                    logits.reshape(-1, logits.size(-1)), targets.reshape(-1)
+                )
+
+            def matvec(vectors: Sequence[torch.Tensor]) -> list[torch.Tensor]:
+                return residual_hvp(model, params, inputs, loss_from_logits, vectors)
+
+            seed = spec.seed + 1_000_003 * probe_index
+            if spec.variant == "adaptive_projection":
+                config = AdaptiveProbeConfig(
+                    target_relative_rms=float(spec.hyperparameters.get("adaptive_target", 0.25)),
+                    min_final_probes=int(spec.hyperparameters.get("adaptive_min_probes", 1)),
+                    max_final_probes=int(spec.hyperparameters.get("adaptive_max_probes", 4)),
+                )
+                weights = [
+                    p.grad.detach().square() if p.grad is not None else torch.ones_like(p)
+                    for p in params
+                ]
+                estimate = adaptive_residual_diagonal(
+                    matvec, params, config, seed=seed, weights=weights
+                )
+            else:
+                estimate = fixed_rademacher_diagonal(
+                    matvec, params, int(spec.hyperparameters["probe_count"]), seed=seed
+                )
+            optimizer.accumulate_residual(list(zip(params, estimate.diagonal)))
+            decision = None
+            if spec.variant == "adaptive_projection":
+                decision = {
+                    "step": step,
+                    "hvp_calls": estimate.hvp_calls,
+                    "final_probes": estimate.final_probes,
+                    "projection_rank": estimate.projection_rank,
+                }
+            return estimate.hvp_calls, decision
+        assert prober is not None
         if spec.variant == "isotropic":
             vectors = [
                 flip_signs(p.shape, spec.seed + 1_000_003 * probe_index + i, p.device, p.dtype)
@@ -185,7 +234,7 @@ def _update_curvature(
             absolute=spec.optimizer == "adahessian",
         )
         optimizer.update_hessian(sync_curvature_dict(samples, op="mean"))
-    return int(spec.optimizer in {"radon", "sophia", "adahessian"})
+    return int(spec.optimizer in {"radon", "sophia", "adahessian"}), None
 
 
 @torch.no_grad()
@@ -223,7 +272,10 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
         device = get_device()
     if spec.steps < 1 or spec.eval_batches < 1:
         raise ValueError("steps and eval_batches must be positive")
-    if spec.variant not in {"standard", "isotropic", "full_hessian"}:
+    if spec.variant not in {
+        "standard", "isotropic", "full_hessian",
+        "adaptive_projection", "fixed_rademacher",
+    }:
         raise ValueError(f"Unknown ablation variant: {spec.variant}")
     if spec.variant != "standard" and spec.optimizer != "radon":
         raise ValueError("Curvature variants require RADON")
@@ -257,6 +309,7 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
     last_train_loss = float("nan")
     processed_tokens = 0
     hvp_calls_per_rank = 0
+    adaptive_decisions: list[dict[str, int]] = []
     started = time.perf_counter()
     for step in range(spec.steps):
         for group in optimizer.param_groups:
@@ -285,9 +338,12 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
             (loss * weight).backward()
             weighted_loss += loss.detach().item() * weight
         assert curvature_batch is not None
-        hvp_calls_per_rank += _update_curvature(
+        calls, decision = _update_curvature(
             spec, optimizer, prober, model, params, *curvature_batch, step
         )
+        hvp_calls_per_rank += calls
+        if decision is not None:
+            adaptive_decisions.append(decision)
         grad_norm = torch.nn.utils.clip_grad_norm_(params, 1.0)
         if not torch.isfinite(grad_norm).item():
             raise FloatingPointError(f"Non-finite gradient at step {step}")
@@ -301,6 +357,9 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
         torch.tensor(time.perf_counter() - started, device=device, dtype=torch.float64),
         op="max",
     ).item()
+    hvp_count_tensor = torch.tensor(hvp_calls_per_rank, device=device, dtype=torch.float64)
+    hvp_calls_total = int(tpu_all_reduce(hvp_count_tensor.clone(), op="sum").item())
+    hvp_calls_max_per_rank = int(tpu_all_reduce(hvp_count_tensor.clone(), op="max").item())
     val_loss, val_ppl = evaluate(model, valid_data, spec, device, rank)
     hardware = (
         get_tpu_config().pod_name if device.type == "xla"
@@ -332,6 +391,10 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
         "elapsed_seconds": elapsed,
         "mean_step_time_ms": elapsed * 1000 / spec.steps,
         "hvp_calls_per_rank": hvp_calls_per_rank,
+        "hvp_calls_total": hvp_calls_total,
+        "hvp_calls_mean_per_rank": hvp_calls_total / world_size,
+        "hvp_calls_max_per_rank": hvp_calls_max_per_rank,
+        "adaptive_decisions": adaptive_decisions if rank == 0 else [],
         "smoke": spec.smoke,
     }
 
@@ -379,9 +442,59 @@ def validate_measured_result(result: dict[str, Any], expected: dict[str, Any]) -
     frequency = int(result["hyperparameters"].get("probe_freq", 4))
     if frequency < 1:
         raise ValueError("Raw run has invalid probe frequency")
-    expected_calls = (
-        (result["steps"] - 1) // frequency + 1
-        if result["optimizer"] in {"radon", "sophia", "adahessian"} else 0
-    )
-    if result.get("hvp_calls_per_rank") != expected_calls:
+    scheduled = (result["steps"] - 1) // frequency + 1
+    variant = result.get("variant")
+    if result["optimizer"] not in {"radon", "sophia", "adahessian"}:
+        call_range = (0, 0)
+    elif variant == "adaptive_projection":
+        minimum = int(result["hyperparameters"].get("adaptive_min_probes", 1))
+        maximum = int(result["hyperparameters"].get("adaptive_max_probes", 4))
+        if not 1 <= minimum <= maximum:
+            raise ValueError("Raw run has invalid adaptive probe limits")
+        call_range = (scheduled * (3 + minimum), scheduled * (4 + maximum))
+    elif variant == "fixed_rademacher":
+        probes = int(result["hyperparameters"].get("probe_count", 0))
+        if probes < 1:
+            raise ValueError("Raw run has invalid fixed probe count")
+        call_range = (scheduled * probes, scheduled * probes)
+    else:
+        call_range = (scheduled, scheduled)
+    calls = result.get("hvp_calls_per_rank")
+    if not isinstance(calls, int) or not call_range[0] <= calls <= call_range[1]:
         raise ValueError("Raw run has inconsistent HVP call count")
+    total_calls = result.get("hvp_calls_total")
+    maximum_calls = result.get("hvp_calls_max_per_rank")
+    mean_calls = result.get("hvp_calls_mean_per_rank")
+    if not isinstance(total_calls, int) or not call_range[0] * world_size <= total_calls <= call_range[1] * world_size:
+        raise ValueError("Raw run has inconsistent distributed HVP total")
+    if not isinstance(maximum_calls, int) or not calls <= maximum_calls <= call_range[1]:
+        raise ValueError("Raw run has inconsistent maximum HVP count")
+    if not isinstance(mean_calls, (int, float)) or not math.isclose(
+        mean_calls, total_calls / world_size, rel_tol=1e-12
+    ):
+        raise ValueError("Raw run has inconsistent mean HVP count")
+    decisions = result.get("adaptive_decisions")
+    if variant == "adaptive_projection":
+        if not isinstance(decisions, list) or len(decisions) != scheduled:
+            raise ValueError("Raw run has incomplete adaptive decisions")
+        if not all(
+            isinstance(item, dict) and isinstance(item.get("hvp_calls"), int)
+            for item in decisions
+        ):
+            raise ValueError("Raw run has malformed adaptive decisions")
+        if sum(item.get("hvp_calls", -1) for item in decisions) != calls:
+            raise ValueError("Raw run adaptive decisions disagree with HVP count")
+        for index, item in enumerate(decisions):
+            final_probes = item.get("final_probes")
+            decision_calls = item.get("hvp_calls")
+            if (
+                item.get("step") != index * frequency
+                or item.get("projection_rank") not in (0, 1)
+                or not isinstance(final_probes, int)
+                or not minimum <= final_probes <= maximum
+                or not isinstance(decision_calls, int)
+                or decision_calls not in (3 + final_probes, 4 + final_probes)
+            ):
+                raise ValueError("Raw run has invalid adaptive decision")
+    elif decisions != []:
+        raise ValueError("Raw run has unexpected adaptive decisions")

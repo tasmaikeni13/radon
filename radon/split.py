@@ -86,16 +86,16 @@ def fisher_diag_sample(
 
 
 @torch.enable_grad()
-def residual_probe(
+def residual_hvp(
     model: torch.nn.Module,
     params: Sequence[torch.Tensor],
     inputs: torch.Tensor,
     loss_from_logits: Callable[[torch.Tensor], torch.Tensor],
     probes: Sequence[torch.Tensor],
-) -> list[tuple[torch.Tensor, torch.Tensor]]:
-    """Compute (Rv) ⊙ v for residual R = H - S at the current parameter coordinates.
+) -> list[torch.Tensor]:
+    """Compute Rv for residual R = H - S at the current parameter coordinates.
 
-    Returns a list of (parameter, tensor) pairs in float32.
+    Returns one residual product per parameter in float32.
     """
     was_training = model.training
     model.eval()
@@ -128,12 +128,22 @@ def residual_probe(
 
         sv = torch.autograd.grad(logits, params, grad_outputs=lambda_jv.to(logits.dtype))
 
-        # 4. (R·v) ⊙ v = (H·v - S·v) ⊙ v
-        out = []
-        for p, hvi, svi, vi in zip(params, hv, sv, probes):
-            rvi = _lift_precision(hvi) - _lift_precision(svi)
-            out.append((p, rvi * _lift_precision(vi)))
-        return out
+        return [_lift_precision(hvi) - _lift_precision(svi) for hvi, svi in zip(hv, sv)]
     finally:
         if was_training:
             model.train()
+
+
+def residual_probe(
+    model: torch.nn.Module,
+    params: Sequence[torch.Tensor],
+    inputs: torch.Tensor,
+    loss_from_logits: Callable[[torch.Tensor], torch.Tensor],
+    probes: Sequence[torch.Tensor],
+) -> list[tuple[torch.Tensor, torch.Tensor]]:
+    """Compute (Rv) ⊙ v from one exact residual Hessian-vector product."""
+    products = residual_hvp(model, params, inputs, loss_from_logits, probes)
+    return [
+        (p, product * _lift_precision(vector))
+        for p, product, vector in zip(params, products, probes)
+    ]

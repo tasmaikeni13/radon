@@ -105,6 +105,7 @@ def test_real_data_training_path_with_tiny_model(tmp_path, monkeypatch):
     assert result["model_config"]["vocab_size"] == 64
     assert result["hardware"] == "CPU"
     assert result["hvp_calls_per_rank"] == 0
+    assert result["hvp_calls_total"] == 0
     assert np.isfinite(result["val_loss"])
     validate_measured_result(result, {
         "steps": 1, "tokens_total": 350,
@@ -116,3 +117,23 @@ def test_real_data_training_path_with_tiny_model(tmp_path, monkeypatch):
     tampered_count = dict(result, hvp_calls_per_rank=1)
     with pytest.raises(ValueError, match="HVP call count"):
         validate_measured_result(tampered_count, {"tokens_total": 350})
+
+    adaptive_spec = TrainSpec(
+        optimizer="radon", seed=42,
+        hyperparameters={
+            "lr": 1e-3, "cycle_m": 1, "probe_freq": 1,
+            "adaptive_target": 0.25, "adaptive_min_probes": 1,
+            "adaptive_max_probes": 2,
+        },
+        steps=1, tokens_total=350, block_size=128, microbatch_size=2,
+        train_path=train_file, valid_path=valid_file, eval_batches=1,
+        variant="adaptive_projection",
+    )
+    adaptive_result = run_training(adaptive_spec, torch.device("cpu"))
+    assert 4 <= adaptive_result["hvp_calls_per_rank"] <= 6
+    assert adaptive_result["hvp_calls_total"] == adaptive_result["hvp_calls_per_rank"]
+    assert len(adaptive_result["adaptive_decisions"]) == 1
+    assert adaptive_result["adaptive_decisions"][0]["hvp_calls"] == adaptive_result["hvp_calls_per_rank"]
+    validate_measured_result(adaptive_result, {
+        "variant": "adaptive_projection", "tokens_total": 350,
+    })

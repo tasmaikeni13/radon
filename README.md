@@ -6,7 +6,7 @@ RADON is the **Residual-aware Antithetic Decoupled Orthogonal Newton Optimizer**
 
 For a specified accuracy target and compute budget, how should the optimizer **adaptively choose both the number and directions** of Hessian-vector products used to estimate its curvature diagonal as the model and data change? When should it stop probing and update? One Hessian-vector product returns a vector; reconstructing the entire Hessian is a different, more expensive objective.
 
-The exact coded-probe variance identity in [theory.md](theory.md) is for a fixed matrix and a preset code. It does not establish an optimal adaptive policy for a moving neural-network Hessian. The current heavy-run drivers can compare selected configurations on validation loss and time, but they do not yet measure a curvature-error-versus-cost frontier or implement an adaptive policy. The required diagnostic protocol and evidence boundary are in [Phase 8](phases/phase8.md). No optimality or performance result is claimed.
+The original fixed Hadamard path remains available. A separate adaptive residual path uses a pilot HVP to choose a projection direction, calibration HVPs to choose projection and a bounded final probe count, and fresh final HVPs to estimate the diagonal. Its fixed-matrix conditional unbiasedness and one-probe variance are proved in [Lean](proofs/RadonCert/RadonCert/Adaptive.lean); the mathematical scope is in [theory.md](theory.md). This is a comparison method, not an optimality or training-performance claim. [Phase 8](phases/phase8.md) lists the remaining evidence needed.
 
 ## Evidence status
 
@@ -30,6 +30,12 @@ cd proofs/RadonCert && ~/.elan/bin/lake build
 
 The 10 numerical gates use small fp64 examples. The kernel and model checks use CPU-sized workloads; they do not verify TPU collectives or training throughput.
 
+The adaptive conditional identity has an exact small-matrix test in `tests/test_adaptive.py`. Its matrix-free Monte Carlo smoke check compares against independent random probes at the same HVP count and the original fixed code:
+
+```bash
+python3 experiments/monte_carlo_adaptive.py --smoke
+```
+
 ## Phases 6–8 smoke tests
 
 ```bash
@@ -38,7 +44,7 @@ python3 experiments/run_competitive_benchmark.py --smoke --steps 1
 python3 experiments/run_ablations.py --smoke --steps 1
 ```
 
-Smoke tests use a small transformer and synthetic tokens when local arrays are absent. They write no benchmark results. The full drivers are implemented for the owner's later runs: they enforce real, separate train and validation arrays, count processed token positions exactly, evaluate held-out validation loss, and write raw measured runs before aggregate reports. Their TPU launch option is `--full --tpu`; the TPU path has not been tested on physical hardware.
+Smoke tests use a small transformer and synthetic tokens when local arrays are absent. They write no benchmark results. Phase 8 now includes adaptive projection and fixed-count Rademacher variants alongside the original coded variants; raw runs count every HVP, including adaptive pilot and calibration calls, record distributed HVP totals, and log each rank-zero adaptive decision. The full drivers are implemented for the owner's later runs: they enforce real, separate train and validation arrays, count processed token positions exactly, evaluate held-out validation loss, and write raw measured runs before aggregate reports. Their TPU launch option is `--full --tpu`; the TPU path has not been tested on physical hardware.
 
 Phase 6 evaluates each registered candidate for 600M processed token positions **per seed** at 2,500 steps. Phase 7 uses the measured Phase 6 selections for 2.5B positions per optimizer and seed. Phase 8 uses measured Phase 7 evidence for 2.5B positions per variant and seed. See the phase documents for the expected file names and owner-run commands. These full modes are expensive and have not been invoked here.
 

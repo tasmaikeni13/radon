@@ -33,6 +33,8 @@ The following theorems must compile with zero `sorry` in `proofs/RadonCert/Radon
 5. `Radon.residual_smul`: Linearity of residual in loss gradient.
 6. `Radon.residual_zero`: Vanishing residual when the outer-loss gradient is zero. A zero parameter gradient alone is insufficient.
 
+`proofs/RadonCert/RadonCert/Adaptive.lean` additionally checks `adaptive_diag_split`, `adaptive_probe_unbiased`, `adaptive_probe_variance`, and `adaptive_selected_variance` for a fixed matrix and a fresh final sign probe. `adaptive_core_fusion_unbiased` and `adaptive_core_fusion_variance` cover fusion with an exact structural-core diagonal. The pilot-selected direction is arbitrary. These theorems do not certify the empirical stopping threshold, multi-probe variance scaling, sampled-core noise, or training convergence.
+
 ---
 
 ## 4. Execution & Verification Gate

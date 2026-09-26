@@ -32,7 +32,7 @@ For a 2D weight tensor, `code(a,b)=(a+b) mod m` gives distinct orthogonal codes 
 
 If the structural diagonal were exact, probing only \(R\) would leave variance governed by \(R\). In the implemented optimizer the structural diagonal is sampled, so both channels' errors must be measured. Scaling the outer loss gradient by \(c\) scales the ideal residual variance by \(c^2\), holding the model derivatives fixed.
 
-## Adaptive probe design: proposed research problem
+## Adaptive residual projection: implemented finite-budget policy
 
 The central question is to choose a probe count, directions, and refresh schedule from observations at each training state, subject to a stated error or compute target. The target must be specified: residual diagonal error, total Hessian-diagonal error, error in the preconditioned update, or held-out loss. These targets need not select the same policy. Count all pilot and diagnostic operator calls in the cost.
 
@@ -44,9 +44,35 @@ For a **fixed** residual matrix \(R\), a complete \(m\)-row Hadamard cycle, and 
 
 This makes alignment a weighted collision problem: directions should separate coordinates with large residual coupling and high update sensitivity. Latin coloring is one fixed candidate, not a solution for every \(R\). Probe count can be posed as the smallest measured or certified \(m\) whose risk reaches a prespecified threshold once all probe costs are included. Without assumptions on the Hessian family and accuracy target, there is no instance-independent cheap optimum.
 
-An adaptive design may estimate useful coupling information from previous observations, then choose \(m_t\) and \(c_t\) for the current state. To reuse the fixed-matrix unbiasedness argument, the signs used to evaluate a chosen design must be fresh and independent of the observations used to choose it. If directions or stopping decisions depend on results from the same sign cycle, a new sequential estimator and guarantee are needed. A cycle spanning training steps additionally sees different \(R_t\), so its error includes curvature drift. Structural-core sampling error is a separate term. None of these adaptive guarantees is currently proved in Lean or implemented in the optimizer.
+The separate `radon/adaptive.py` path makes one pilot residual query \(y=R\omega\) at a **frozen** model and batch. If \(y\ne0\), it sets \(q=y/\|y\|_2\) and uses another query for \(Rq\). The pilot therefore changes the next probe directions according to the observed residual. Let \(P=qq^\top\) if projection is selected, or \(P=0\) if the policy declines it, and define \(B=R(I-P)\). Then
 
-Prior art includes [stochastic diagonal estimation and Diag++](https://arxiv.org/abs/2201.10684), [hierarchical Hadamard probing](https://arxiv.org/abs/1302.4018), and [adaptive selection of projection dimension and query count](https://arxiv.org/abs/2410.11613). The general diagonal-from-matvec problem, structured probing, and some adaptive query allocation are established. A contribution here would need a distinct residual-aware policy for changing neural Hessians, an appropriate conditional guarantee, or convincing cost-quality evidence against those references.
+\[
+\operatorname{diag}(R)=\operatorname{diag}(RP)+\operatorname{diag}(B),\qquad
+\hat d_R=\operatorname{diag}(RP)+\frac1s\sum_{k=1}^{s}z_k\odot Bz_k.
+\]
+
+The \(z_k\) are **fresh independent Rademacher signs**, separate from pilot and calibration signs. Conditional on everything used to select \(P\) and \(s\), with \(R\) fixed, linearity and \(\mathbb E[z_i z_j]=\mathbf1\{i=j\}\) give
+
+\[
+\mathbb E[\hat d_{R,i}\mid P,s]=R_{ii},\qquad
+\operatorname{Var}(\hat d_{R,i}\mid P,s)=\frac1s\sum_{j\ne i}B_{ij}^{2}.
+\]
+
+This applies to indefinite \(R\); projection is not guaranteed to reduce the rowwise variance. The Lean theorems `Radon.adaptive_diag_split`, `Radon.adaptive_probe_unbiased`, `Radon.adaptive_probe_variance`, and `Radon.adaptive_selected_variance` machine-check the diagonal identity and exact **single-final-probe** mean and variance for every pilot-selected direction. `Radon.adaptive_core_fusion_unbiased` and `Radon.adaptive_core_fusion_variance` additionally show that an exact structural-core diagonal adds no residual-probe variance. The \(1/s\) scaling follows from independence of the final probes and is not separately formalized in Lean.
+
+Two independent calibration signs produce \(x_1=z_1\odot Bz_1\) and \(x_2=z_2\odot Bz_2\). For fixed \(P\) and nonnegative weights \(w_i\),
+
+\[
+\hat V_P=\tfrac12\sum_i w_i(x_{1i}-x_{2i})^2,
+\qquad
+\mathbb E[\hat V_P\mid P]=\sum_i w_i\sum_{j\ne i}B_{ij}^2.
+\]
+
+The same two HVPs also supply a full-probe risk estimate via \(Rz=Bz+(q^\top z)Rq\), so the implementation chooses projection or no projection without another operator call. It then chooses \(s\) between preset bounds by comparing the selected variance proxy with a relative-error target; training uses \(w_i=g_i^2\) from the current gradient. The actual cost is \(4+s\) residual HVPs when \(q\ne0\), or \(3+s\) when the pilot product is zero. Every pilot, calibration, and final query is counted. A fixed-count independent Rademacher estimator and the original coded cycle remain available as controls.
+
+The two-sample proxy is noisy, and choosing the lower of two proxies introduces selection bias in the **risk estimate**. Consequently, `target_relative_rms` is a heuristic request, not a certified error threshold or an optimal stopping guarantee. Fresh final signs still preserve conditional unbiasedness. The formal result is for a frozen matrix; training-level EMA lag, sampled structural-core noise, hardware cost, and optimizer convergence need separate analysis. The adaptive path makes all of its HVPs before the parameter update, while the fixed coded cycle spans changing training states.
+
+Prior art includes [stochastic diagonal estimation and Diag++](https://arxiv.org/abs/2201.10684), [hierarchical Hadamard probing](https://arxiv.org/abs/1302.4018), and [adaptive selection of projection dimension and query count](https://arxiv.org/abs/2410.11613). Projection plus adaptive query allocation is established. This implementation is a residual-aware comparison path, not a demonstrated novel or optimal method. A contribution would require stronger stopping guarantees or convincing cost-quality evidence on changing neural Hessians against these references.
 
 ## Optimizer step
 

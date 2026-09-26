@@ -58,7 +58,7 @@ Each HVP is an $N$-dimensional response to one input direction; tomography is an
 \begin{quote}
 \textit{At each training state, how should we adaptively choose the number and directions of curvature probes, and when should we refresh them, to meet a specified accuracy target at minimum cost?}
 \end{quote}
-Matrix diagonal estimation from matvecs and adaptive query allocation are established topics~\cite{baston2022stochastic,han2024adaptive}. RADON currently studies a fixed residual-aware code and a finite sweep over cycle lengths and probing frequencies. An adaptive direction-and-stopping policy and an optimality guarantee remain open problems.
+Matrix diagonal estimation from matvecs and adaptive query allocation are established topics~\cite{baston2022stochastic,han2024adaptive}. RADON retains the fixed coded method and includes an experimental adaptive residual-projection path. Its stopping target is heuristic; an optimality guarantee remains open.
 
 Conventional approaches to this problem fall into two failure modes:
 \begin{enumerate}
@@ -204,6 +204,26 @@ In particular, the residual-probe variance is zero if the outer-loss gradient is
 Machine-checked in Lean 4 (\texttt{Radon.split\_variance\_residual\_only}, \texttt{Radon.split\_variance\_scaling}, \texttt{Radon.split\_exact\_at\_critical}). In the implementation the structural diagonal is sampled, so total estimator variance also includes structural sampling noise. A zero parameter gradient alone does not imply a zero outer-loss gradient.
 \end{proof}
 
+\subsection{Adaptive Residual Projection at a Frozen Training State}
+
+The adaptive comparison path uses one pilot residual HVP $y=R\omega$ and sets $q=y/\|y\|_2$ when $y\ne0$. A second HVP computes $Rq$. Two independent calibration probes select either $P=qq^\top$ or $P=0$ and a final probe count $s$ within preset bounds. All final signs $z_k$ are sampled afresh. With $B=R(I-P)$, the estimator is
+\begin{equation}
+\hat r = \operatorname{diag}(RP)+\frac{1}{s}\sum_{k=1}^{s}z_k\odot Bz_k.
+\end{equation}
+\begin{theorem}[Conditional Residual Diagonal Identity]
+At a fixed model, batch, and residual matrix $R$, condition on all pilot and calibration outcomes. For either selected $P$, independent final Rademacher signs give
+\begin{equation}
+\mathbb E[\hat r_i\mid P,s]=R_{ii},\qquad
+\operatorname{Var}(\hat r_i\mid P,s)=\frac{1}{s}\sum_{j\ne i}B_{ij}^{2}.
+\end{equation}
+No positive-semidefiniteness assumption on $R$ is needed.
+\end{theorem}
+\begin{proof}
+The diagonal split follows from $R=RP+R(I-P)$. For each fresh sign $z$, the off-diagonal error is $\sum_{j\ne i} B_{ij}z_i z_j$; its mean is zero and its second moment is $\sum_{j\ne i}B_{ij}^2$. Independent final samples divide variance by $s$. Lean 4 checks the exact split and finite-sign-cube mean and variance for one final probe, uniformly in the pilot-selected direction (\texttt{Radon.adaptive\_diag\_split}, \texttt{Radon.adaptive\_probe\_unbiased}, \texttt{Radon.adaptive\_selected\_variance}); the core-fusion versions cover an exact structural diagonal. The multi-probe independence calculation is stated here and is not separately formalized.
+\end{proof}
+
+Two independent calibration products $x_1=z_1\odot Bz_1$ and $x_2=z_2\odot Bz_2$ yield $\hat V_P=\frac12\sum_i w_i(x_{1i}-x_{2i})^2$, whose expectation for a fixed $P$ is $\sum_i w_i\sum_{j\ne i}B_{ij}^2$. The implementation estimates this quantity for both candidate projections from the same two residual HVPs, chooses the lower empirical proxy, and selects $s$ from its ratio to a sampled diagonal scale. Its cost is $4+s$ residual HVPs if the pilot is nonzero and $3+s$ otherwise. Selection makes the chosen proxy noisy and downward biased; the target is not a certified error bound. Fresh final signs preserve conditional unbiasedness. Structural-core sampling and optimizer EMA add separate errors, and this fixed-state theorem does not imply training convergence or optimal query complexity~\cite{baston2022stochastic,han2024adaptive}.
+
 \section{The RADON Optimization Algorithm}
 
 \begin{tcolorbox}[colback=gray!5,colframe=gray!50,arc=2mm,title={\textbf{Algorithm 1: RADON Optimizer}}]
@@ -231,13 +251,15 @@ Machine-checked in Lean 4 (\texttt{Radon.split\_variance\_residual\_only}, \text
 \end{enumerate}
 \end{tcolorbox}
 
+Algorithm 1 is the original fixed coded path. The separate adaptive variant computes the residual projection estimate above at a single frozen parameter state, commits it as one residual EMA observation using a one-observation cycle, and records every pilot, calibration, and final HVP. Fixed-count Rademacher variants provide multi-probe training controls; the original fixed coded variants remain unchanged.
+
 \section{Empirical Evaluation Plan}
 
-The planned Phase 6 sweep, Phase 7 competitive benchmark, and Phase 8 ablations have not been run to completion. CPU smoke tests exercise the experiment code on small models, but they cannot establish validation perplexity, hardware efficiency, or relative optimizer performance. Results and figures will be added only after measured runs with real FineWeb-Edu data, held-out validation, exact token accounting, and complete configuration records.
+The planned Phase 6 sweep, Phase 7 competitive benchmark, and Phase 8 ablations have not been run to completion. A small synthetic-matrix Monte Carlo driver compares adaptive projection with fixed random probes at matched HVP count and the original coded cycle against exact diagonals; its smoke output is not neural-training evidence. CPU smoke tests exercise the experiment code on small models, but they cannot establish validation perplexity, hardware efficiency, or relative optimizer performance. Results and figures will be added only after measured runs with real FineWeb-Edu data, held-out validation, exact token accounting, and complete configuration records.
 
 \section{Formal Verification in Lean 4}
 
-The listed carrier and probe identities are machine-verified in Lean 4 and Mathlib. The formal development resides in \texttt{proofs/RadonCert/RadonCert/Radon.lean} and contains zero \texttt{sorry} placeholders and no project-specific axioms. Axiom inspection reports Lean's standard \texttt{propext}, \texttt{Classical.choice}, and \texttt{Quot.sound}:
+The listed carrier and probe identities are machine-verified in Lean 4 and Mathlib. The formal development resides in \texttt{proofs/RadonCert/RadonCert/Radon.lean} and \texttt{proofs/RadonCert/RadonCert/Adaptive.lean}, with zero \texttt{sorry} placeholders and no project-specific axioms. Axiom inspection of the new adaptive theorems reports only Lean's standard \texttt{propext}, \texttt{Classical.choice}, and \texttt{Quot.sound}:
 \begin{itemize}
     \item \texttt{Radon.split\_exact}: Exactness of the $H = S + R$ decomposition.
     \item \texttt{Radon.core\_posCore}: Real positive semidefiniteness of $S$.
@@ -247,11 +269,13 @@ The listed carrier and probe identities are machine-verified in Lean 4 and Mathl
     \item \texttt{Radon.split\_variance\_scaling}: Exact scaling when the outer-loss gradient is multiplied by a scalar, with model derivatives fixed.
     \item \texttt{Radon.split\_exact\_at\_critical}: Exact residual recovery when the outer-loss gradient is zero and the structural diagonal is exact.
     \item \texttt{Radon.directional\_newton\_optimal}: Exact 1D Newton minimizer along any probe ray.
+    \item \texttt{Radon.adaptive\_diag\_split}, \texttt{Radon.adaptive\_probe\_unbiased}, and \texttt{Radon.adaptive\_selected\_variance}: Fixed-state diagonal identity and one-probe sign-cube moments for any pilot-selected direction.
+    \item \texttt{Radon.adaptive\_core\_fusion\_unbiased} and \texttt{Radon.adaptive\_core\_fusion\_variance}: An exact structural-core diagonal leaves adaptive residual-probe variance unchanged.
 \end{itemize}
 
 \section{Conclusion}
 
-We have presented RADON, a coded probing approach to diagonal curvature estimation. The algebraic decomposition and probe identities motivate the implementation. Whether the optimizer improves training quality or efficiency at scale remains an empirical question for the planned FineWeb-Edu experiments.
+We have presented RADON with fixed coded and adaptive residual-projection approaches to diagonal curvature estimation. The algebraic decomposition and conditional probe identities motivate the implementation. Whether either path improves training quality or efficiency at scale remains an empirical question for the planned FineWeb-Edu experiments.
 
 \bibliographystyle{plain}
 \bibliography{refs}
