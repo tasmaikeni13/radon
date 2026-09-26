@@ -145,12 +145,15 @@ def _update_curvature(
     inputs: torch.Tensor,
     targets: torch.Tensor,
     step: int,
-) -> None:
-    if step % int(spec.hyperparameters.get("probe_freq", 4)):
-        return
+) -> int:
+    """Update curvature and return the number of HVP calls on this rank."""
+    frequency = int(spec.hyperparameters.get("probe_freq", 4))
+    if frequency < 1:
+        raise ValueError("probe_freq must be positive")
+    if step % frequency:
+        return 0
     if spec.optimizer == "radon":
         assert isinstance(optimizer, Radon) and prober is not None
-        frequency = int(spec.hyperparameters.get("probe_freq", 4))
         probe_index = step // frequency
         if spec.variant != "full_hessian":
             optimizer.accumulate_core(fisher_diag_sample(model, params, inputs))
@@ -182,6 +185,7 @@ def _update_curvature(
             absolute=spec.optimizer == "adahessian",
         )
         optimizer.update_hessian(sync_curvature_dict(samples, op="mean"))
+    return int(spec.optimizer in {"radon", "sophia", "adahessian"})
 
 
 @torch.no_grad()
@@ -252,6 +256,7 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
     optimizer, prober = build_optimizer(spec, params)
     last_train_loss = float("nan")
     processed_tokens = 0
+    hvp_calls_per_rank = 0
     started = time.perf_counter()
     for step in range(spec.steps):
         for group in optimizer.param_groups:
@@ -280,7 +285,9 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
             (loss * weight).backward()
             weighted_loss += loss.detach().item() * weight
         assert curvature_batch is not None
-        _update_curvature(spec, optimizer, prober, model, params, *curvature_batch, step)
+        hvp_calls_per_rank += _update_curvature(
+            spec, optimizer, prober, model, params, *curvature_batch, step
+        )
         grad_norm = torch.nn.utils.clip_grad_norm_(params, 1.0)
         if not torch.isfinite(grad_norm).item():
             raise FloatingPointError(f"Non-finite gradient at step {step}")
@@ -324,6 +331,7 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
         "val_ppl": val_ppl,
         "elapsed_seconds": elapsed,
         "mean_step_time_ms": elapsed * 1000 / spec.steps,
+        "hvp_calls_per_rank": hvp_calls_per_rank,
         "smoke": spec.smoke,
     }
 
@@ -368,3 +376,12 @@ def validate_measured_result(result: dict[str, Any], expected: dict[str, Any]) -
         rel_tol=1e-10,
     ):
         raise ValueError("Raw run mean step time differs from elapsed time")
+    frequency = int(result["hyperparameters"].get("probe_freq", 4))
+    if frequency < 1:
+        raise ValueError("Raw run has invalid probe frequency")
+    expected_calls = (
+        (result["steps"] - 1) // frequency + 1
+        if result["optimizer"] in {"radon", "sophia", "adahessian"} else 0
+    )
+    if result.get("hvp_calls_per_rank") != expected_calls:
+        raise ValueError("Raw run has inconsistent HVP call count")

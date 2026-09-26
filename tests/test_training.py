@@ -104,6 +104,7 @@ def test_real_data_training_path_with_tiny_model(tmp_path, monkeypatch):
     assert result["synthetic_valid"] is False
     assert result["model_config"]["vocab_size"] == 64
     assert result["hardware"] == "CPU"
+    assert result["hvp_calls_per_rank"] == 0
     assert np.isfinite(result["val_loss"])
     validate_measured_result(result, {
         "steps": 1, "tokens_total": 350,
@@ -112,3 +113,6 @@ def test_real_data_training_path_with_tiny_model(tmp_path, monkeypatch):
     tampered = dict(result, val_ppl=result["val_ppl"] * 2)
     with pytest.raises(ValueError, match="perplexity differs"):
         validate_measured_result(tampered, {"tokens_total": 350})
+    tampered_count = dict(result, hvp_calls_per_rank=1)
+    with pytest.raises(ValueError, match="HVP call count"):
+        validate_measured_result(tampered_count, {"tokens_total": 350})

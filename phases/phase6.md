@@ -4,6 +4,8 @@
 
 The owner will run 3 seeds (42, 1337, 2024) for each optimizer on the 125M causal transformer, using the 600M-token FineWeb-Edu sweep dataset and a 2,500-step horizon. Candidate hyperparameters must be evaluated on held-out validation data, with actual token counts and all configurations recorded. No winning configuration has been established.
 
+For RADON, the grid varies Hadamard cycle length and probe frequency. Selection by validation loss identifies the best *tested* configuration for that training setting; it cannot establish an optimal number of Hessian-vector products or the accuracy of a diagonal estimate. Cycle length and probe frequency must be reported separately.
+
 ## Current implementation status
 
 `experiments/sweep_hparams.py --smoke --steps 1` exercises five optimizer paths on a small model across three seeds and writes no result. The full driver registers 75 candidates, trains each candidate and seed for exactly 600M processed token positions, evaluates a separate validation array, writes one raw JSON per run, and selects by mean validation loss only after all 225 runs exist. Existing raw files are checked before they are reused. No candidate has been measured or selected here.

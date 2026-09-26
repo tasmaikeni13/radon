@@ -32,6 +32,22 @@ For a 2D weight tensor, `code(a,b)=(a+b) mod m` gives distinct orthogonal codes 
 
 If the structural diagonal were exact, probing only \(R\) would leave variance governed by \(R\). In the implemented optimizer the structural diagonal is sampled, so both channels' errors must be measured. Scaling the outer loss gradient by \(c\) scales the ideal residual variance by \(c^2\), holding the model derivatives fixed.
 
+## Adaptive probe design: proposed research problem
+
+The central question is to choose a probe count, directions, and refresh schedule from observations at each training state, subject to a stated error or compute target. The target must be specified: residual diagonal error, total Hessian-diagonal error, error in the preconditioned update, or held-out loss. These targets need not select the same policy. Count all pilot and diagnostic operator calls in the cost.
+
+For a **fixed** residual matrix \(R\), a complete \(m\)-row Hadamard cycle, and code assignment \(c(i)\), the coherence is one when two coordinates share a code and zero otherwise. For nonnegative coordinate weights \(w_i\), the existing variance identity gives the weighted residual risk
+
+\[
+\mathcal E_m(c;R,w)=\sum_i w_i\sum_{j\ne i}R_{ij}^2\mathbf 1\{c(i)=c(j)\}.
+\]
+
+This makes alignment a weighted collision problem: directions should separate coordinates with large residual coupling and high update sensitivity. Latin coloring is one fixed candidate, not a solution for every \(R\). Probe count can be posed as the smallest measured or certified \(m\) whose risk reaches a prespecified threshold once all probe costs are included. Without assumptions on the Hessian family and accuracy target, there is no instance-independent cheap optimum.
+
+An adaptive design may estimate useful coupling information from previous observations, then choose \(m_t\) and \(c_t\) for the current state. To reuse the fixed-matrix unbiasedness argument, the signs used to evaluate a chosen design must be fresh and independent of the observations used to choose it. If directions or stopping decisions depend on results from the same sign cycle, a new sequential estimator and guarantee are needed. A cycle spanning training steps additionally sees different \(R_t\), so its error includes curvature drift. Structural-core sampling error is a separate term. None of these adaptive guarantees is currently proved in Lean or implemented in the optimizer.
+
+Prior art includes [stochastic diagonal estimation and Diag++](https://arxiv.org/abs/2201.10684), [hierarchical Hadamard probing](https://arxiv.org/abs/1302.4018), and [adaptive selection of projection dimension and query count](https://arxiv.org/abs/2410.11613). The general diagonal-from-matvec problem, structured probing, and some adaptive query allocation are established. A contribution here would need a distinct residual-aware policy for changing neural Hessians, an appropriate conditional guarantee, or convincing cost-quality evidence against those references.
+
 ## Optimizer step
 
 `Radon.step()` combines momentum with the sampled core and coded residual exponential averages, clamps the curvature denominator below by `eps`, clips each update coordinate to `[-1,1]`, and applies decoupled weight decay. This is a bounded diagonal preconditioned update. The one-step exact Newton property in the formal file applies to an ideal diagonal quadratic with exact curvature, not to the clipped stochastic optimizer.

@@ -33,13 +33,16 @@ from radon.tpu import get_device, get_world_size, is_master
 SEEDS = (42, 43, 44)
 OUTPUT_DIR = REPO_ROOT / "runs" / "phase8"
 REPORT_PATH = REPO_ROOT / "runs" / "ablations_report.json"
-VARIANTS = ("budget_m2", "budget_m4", "budget_m8", "budget_m16", "budget_m32", "isotropic", "full_hessian")
+VARIANTS = (
+    "cycle_m2", "cycle_m4", "cycle_m8", "cycle_m16", "cycle_m32",
+    "isotropic", "full_hessian",
+)
 
 
 def variant_config(name: str, base_hp: dict[str, Any]) -> tuple[dict[str, Any], str]:
     hp = dict(base_hp)
-    if name.startswith("budget_m"):
-        hp["cycle_m"] = int(name.removeprefix("budget_m"))
+    if name.startswith("cycle_m"):
+        hp["cycle_m"] = int(name.removeprefix("cycle_m"))
         return hp, "standard"
     if name == "isotropic":
         hp["cycle_m"] = 16
@@ -80,7 +83,7 @@ def run_smoke(steps: int) -> None:
     device = get_device()
     world_size = get_world_size()
     base_hp = SMOKE_CONFIGS["radon"]
-    for name in ("budget_m2", "budget_m4", "budget_m16", "isotropic", "full_hessian"):
+    for name in ("cycle_m2", "cycle_m4", "cycle_m16", "isotropic", "full_hessian"):
         hp, variant = variant_config(name, base_hp)
         spec = TrainSpec(
             optimizer="radon", seed=42, hyperparameters=hp,
@@ -116,6 +119,7 @@ def compile_report(base_hp: dict[str, Any], steps: int) -> bool:
             "mean_val_ppl": mean(run["val_ppl"] for run in runs),
             "std_val_ppl": stdev(run["val_ppl"] for run in runs),
             "mean_step_time_ms": mean(run["mean_step_time_ms"] for run in runs),
+            "hvp_calls_per_rank": runs[0]["hvp_calls_per_rank"],
             "raw_files": [str(raw_path(name, seed).relative_to(REPO_ROOT)) for seed in SEEDS],
         }
     report = {

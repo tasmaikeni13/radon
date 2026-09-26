@@ -2,6 +2,12 @@
 
 RADON is the **Residual-aware Antithetic Decoupled Orthogonal Newton Optimizer**, an experimental PyTorch optimizer for diagonal curvature estimation. Its loss Hessian decomposition is \(H = S + R\), where \(S = J^\top (\nabla^2\ell)J\) and \(R\) is the residual curvature. The code estimates the structural diagonal with sampled labels and probes the residual with coded directions.
 
+## Central research question
+
+For a specified accuracy target and compute budget, how should the optimizer **adaptively choose both the number and directions** of Hessian-vector products used to estimate its curvature diagonal as the model and data change? When should it stop probing and update? One Hessian-vector product returns a vector; reconstructing the entire Hessian is a different, more expensive objective.
+
+The exact coded-probe variance identity in [theory.md](theory.md) is for a fixed matrix and a preset code. It does not establish an optimal adaptive policy for a moving neural-network Hessian. The current heavy-run drivers can compare selected configurations on validation loss and time, but they do not yet measure a curvature-error-versus-cost frontier or implement an adaptive policy. The required diagnostic protocol and evidence boundary are in [Phase 8](phases/phase8.md). No optimality or performance result is claimed.
+
 ## Evidence status
 
 The repository contains source code, Lean proofs, numerical checks, and lightweight CPU smoke tests. Previous result JSON files, plots, and a compiled PDF were removed because their reported training numbers were embedded in source code rather than produced by the runs. No 600M-token sweep, 2.5B-token benchmark, TPU performance result, or ablation result is currently certified here. Phases 6–8 are reserved for the owner's heavy runs; the smoke tests exercise small models and do not measure competitive performance.

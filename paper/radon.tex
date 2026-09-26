@@ -54,10 +54,11 @@ Consequently, second-order optimization must operate under a strict measurement 
 \begin{equation}
 p_k = H v_k, \quad v_k \in \mathbb{R}^N, \quad k = 1, \dots, m, \quad m \ll N
 \end{equation}
-Each HVP is an $N$-dimensional response to one input direction; tomography is an analogy for recovering matrix information from directional measurements~\cite{radon1917bestimmung}. Because exact reconstruction of an arbitrary symmetric matrix requires $m \ge N$ linearly independent input directions, a practical optimizer with $m \in \{4, 8, 16, 32\}$ must choose which diagonal information to estimate:
+Each HVP is an $N$-dimensional response to one input direction; tomography is an analogy for recovering matrix information from directional measurements~\cite{radon1917bestimmung}. Because exact reconstruction of an arbitrary symmetric matrix requires $m \ge N$ linearly independent input directions, a practical optimizer must choose which diagonal information to estimate:
 \begin{quote}
-\textit{Given a budget of $m \ll N$ directional projections, how should one place and orient of probe vectors $v_1, \dots, v_m$ to extract maximal actionable curvature?}
+\textit{At each training state, how should we adaptively choose the number and directions of curvature probes, and when should we refresh them, to meet a specified accuracy target at minimum cost?}
 \end{quote}
+Matrix diagonal estimation from matvecs and adaptive query allocation are established topics~\cite{baston2022stochastic,han2024adaptive}. RADON currently studies a fixed residual-aware code and a finite sweep over cycle lengths and probing frequencies. An adaptive direction-and-stopping policy and an optimality guarantee remain open problems.
 
 Conventional approaches to this problem fall into two failure modes:
 \begin{enumerate}
