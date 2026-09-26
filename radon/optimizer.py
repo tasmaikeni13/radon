@@ -3,8 +3,9 @@
 Curvature state incorporates two complementary channels reflecting H = S + R:
 * s : EMA of unbiased non-negative structural core samples (sampled-label Fisher diagonals).
       Guaranteed non-negative, preventing preconditioner sign-flips.
-* r : EMA over completed residual-probe cycles of coded products v ⊙ (Rv). Over a cycle of
-      m Hadamard-Latin coded probes, row and column cross-talk cancels exactly.
+* r : EMA over completed residual-probe cycles of coded products v ⊙ (Rv). For a
+      fixed R, a full Hadamard-Latin cycle cancels selected row and column
+      cross-talk terms. During training R changes between probe steps.
 
 Total curvature: ĥ = ŝ + r̂ estimates diag(H). The structural sample and residual
 probe both contribute estimation noise; only the ideal residual-probe variance is

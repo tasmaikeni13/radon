@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
-import math
 import sys
 from pathlib import Path
 from statistics import mean
@@ -19,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from data.fineweb import DATA_DIR, TRAIN_NPY, VALID_NPY
-from experiments.training import TrainSpec, run_training
+from experiments.training import TrainSpec, run_training, validate_measured_result
 from radon.tpu import get_device, get_world_size, is_master
 
 SEEDS = (42, 1337, 2024)
@@ -86,12 +85,11 @@ def validate_raw(
         "synthetic_train": False,
         "synthetic_valid": False,
         "model_params": 125_160_192,
+        "block_size": 512,
+        "train_file": str(SWEEP_DATA),
+        "valid_file": str(VALID_NPY),
     }
-    for key, value in expected.items():
-        if result.get(key) != value:
-            raise ValueError(f"Invalid Phase 6 raw result: {key}={result.get(key)!r}")
-    if not math.isfinite(result["val_loss"]):
-        raise ValueError("Non-finite held-out validation loss")
+    validate_measured_result(result, expected)
 
 
 def run_smoke(steps: int) -> None:

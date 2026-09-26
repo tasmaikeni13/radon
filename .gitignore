@@ -43,6 +43,7 @@ wheels/
 # Data files (keep symlinks, ignore raw large npy downloads)
 data/*.tmp
 data/*.parquet
+data/*.npy
 
 # OS & IDE
 .DS_Store

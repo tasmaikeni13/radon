@@ -145,7 +145,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--status", action="store_true", help="Print phase status table")
     parser.add_argument("--phase", type=int, help="Execute and verify specific phase ID")
-    parser.add_argument("--all", action="store_true", help="Execute and verify all phases sequentially")
+    parser.add_argument(
+        "--all", action="store_true",
+        help="Run phases 1-5 local gates and phases 6-8 one-step smoke checks only",
+    )
     parser.add_argument(
         "--invalidate",
         type=int,

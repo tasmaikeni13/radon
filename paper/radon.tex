@@ -43,7 +43,7 @@ Second-order optimization in deep learning is constrained by the cost of storing
 In this work, we introduce \textbf{RADON} (\textbf{R}esidual-aware \textbf{A}ntithetic \textbf{D}ecoupled \textbf{O}rthogonal \textbf{N}ewton), a second-order optimization and curvature estimation framework that uses two algebraic principles for diagonal curvature estimation:
 (1) \textbf{Compositional Split-Exact Curvature}: For composite losses $\ell \circ f$, the Hessian decomposes exactly as $H = S + R$, where $S = J_f^\top (\nabla^2 \ell) J_f$ is a positive semidefinite structural core for convex outer losses. Its diagonal is estimated with sampled-label gradients and no double backward. The residual $R = \mathcal{H}_f(\nabla \ell)$ is linear in the outer-loss gradient, so its ideal probe variance scales quadratically when that gradient is scaled with model derivatives fixed.
 (2) \textbf{Coded Tomographic Probing}: By devoting all directional probes exclusively to the residual $R$, and assigning Sylvester-Hadamard codes via Latin-square coloring on parameter tensor grids, immediate row and column neighbor interference is cancelled ($\bar{C}_{ij} = 0$), yielding zero contribution from those pairs in the ideal residual-probe variance.
-The repository includes Lean 4 formal proofs and small numerical checks. Large-scale pre-training, TPU throughput, and comparative optimizer performance remain to be measured.
+The coded cancellation identities assume a fixed curvature matrix over each probe cycle. Training changes the parameters between probes, so exact cycle cancellation is not guaranteed in the optimizer. The repository includes Lean 4 formal proofs and small numerical checks. Large-scale pre-training, TPU throughput, and comparative optimizer performance remain to be measured.
 \end{abstract}
 
 \section{Introduction}
@@ -149,6 +149,7 @@ Over a cycle of $m$ probe vectors $v^1, \dots, v^m$, the time-averaged estimate 
 \hat{M}_{ii} = \frac{1}{m} \sum_{k=1}^m v_i^k (M v^k)_i = M_{ii} + \sum_{j \neq i} M_{ij} \bar{C}_{ij}
 \end{equation}
 where $\bar{C}_{ij} = \frac{1}{m} \sum_{k=1}^m v_i^k v_j^k \in [-1, 1]$ is the empirical cross-coordinate code coherence.
+This identity assumes the same matrix $M$ for all $m$ probes. In the training implementation probes are separated by optimization steps, so the matrix changes and exact cancellation need not hold for the moving-target cycle average.
 
 \subsection{Latin-Square Tensor Coloring}
 

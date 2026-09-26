@@ -57,6 +57,8 @@ def get_tpu_config() -> TPUPodConfig:
 
 def is_tpu_available() -> bool:
     """Returns True if running on an authentic Google Cloud TPU device with torch_xla."""
+    if os.environ.get("JAX_PLATFORMS", "").lower() == "cpu":
+        return False
     if not _HAS_XLA:
         return False
     try:
@@ -137,21 +139,24 @@ def tpu_all_reduce(tensor: torch.Tensor, op: str = "sum") -> torch.Tensor:
     Returns:
         Synchronized reduced tensor.
     """
+    normalized_op = op.lower()
+    if normalized_op not in {"sum", "mean", "min", "max"}:
+        raise ValueError(f"Unsupported reduction: {op}")
     if is_tpu_available():
-        reduce_type = xm.REDUCE_SUM if op.lower() in ("sum", "mean") else op.lower()
+        reduce_type = xm.REDUCE_SUM if normalized_op in ("sum", "mean") else normalized_op
         reduced = xm.all_reduce(reduce_type, tensor)
-        if op.lower() == "mean":
+        if normalized_op == "mean":
             reduced = reduced / get_world_size()
         return reduced
 
     if torch.distributed.is_available() and torch.distributed.is_initialized():
         dist_op = torch.distributed.ReduceOp.SUM
-        if op.lower() == "min":
+        if normalized_op == "min":
             dist_op = torch.distributed.ReduceOp.MIN
-        elif op.lower() == "max":
+        elif normalized_op == "max":
             dist_op = torch.distributed.ReduceOp.MAX
         torch.distributed.all_reduce(tensor, op=dist_op)
-        if op.lower() == "mean":
+        if normalized_op == "mean":
             tensor = tensor / torch.distributed.get_world_size()
         return tensor
 
@@ -161,11 +166,19 @@ def tpu_all_reduce(tensor: torch.Tensor, op: str = "sum") -> torch.Tensor:
 def tpu_optimizer_step(optimizer: torch.optim.Optimizer, barrier: bool = True) -> None:
     """Executes optimizer parameter step on TPU Pod with gradient sync and graph lowering.
 
-    Calls xm.optimizer_step on XLA TPU devices; calls standard optimizer.step() on CPU/CUDA.
+    Calls xm.optimizer_step on XLA TPU devices. For an initialized PyTorch
+    distributed group on CPU/CUDA, averages gradients before the local step.
     """
     if is_tpu_available():
         xm.optimizer_step(optimizer, barrier=barrier)
         return
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        world_size = torch.distributed.get_world_size()
+        for group in optimizer.param_groups:
+            for param in group["params"]:
+                if param.grad is not None:
+                    torch.distributed.all_reduce(param.grad, op=torch.distributed.ReduceOp.SUM)
+                    param.grad.div_(world_size)
     optimizer.step()
 
 
@@ -185,8 +198,7 @@ def sync_curvature_dict(
 ) -> list[tuple[torch.Tensor, torch.Tensor]]:
     """Synchronizes structural Fisher core or residual probe products across all TPU cores.
 
-    Ensures that in multi-core distributed TPU v4-32 training, curvature estimates
-    are pooled across the entire cluster batch B_cluster = 32 * B_local.
+    Pools curvature estimates across the 16 worker devices of a TPU v4-32 slice.
     """
     if get_world_size() <= 1:
         return list(curvature_samples)

@@ -1,7 +1,7 @@
 """Hessian-vector product (HVP) and operator sweep routines for RADON.
 
-Supports both PyTorch autodiff (for GPU/CPU execution) and JAX/XLA
-forward-over-reverse automatic differentiation (for TPU Pod slices).
+Supports PyTorch reverse-over-reverse autodiff (including the torch_xla training
+path) and an optional JAX forward-over-reverse helper.
 """
 
 from typing import Any, Callable, List, Sequence

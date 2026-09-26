@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "radon-opt"
 version = "1.0.0"
-description = "RADON: Optimal Tomographic Probing for Neural Curvature via Coded Directional Projections"
+description = "RADON: residual-aware coded probing for neural curvature estimation"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}

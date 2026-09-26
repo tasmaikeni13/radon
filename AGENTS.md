@@ -15,11 +15,11 @@ The name uses tomography as an analogy: directional Hessian-vector products $Hv_
 - **R — Residual-aware**: Splits curvature into a positive semidefinite structural core $S = J^\top (\nabla^2 \ell) J$ and a residual $R = H - S$. The implementation samples the core diagonal, so that channel has nonzero sampling noise.
 - **A — Antithetic**: Uses a fixed Rademacher sign flip within each Hadamard code cycle. A probe pair $v,-v$ gives identical diagonal products; no universal factor-of-two variance reduction is established.
 - **D — Decoupled**: Decouples curvature diagonal damping ($\epsilon \ge 10^{-12}$) and trust-region coordinate clipping from first-order momentum and weight decay.
-- **O — Orthogonal**: Structures probe vectors via Sylvester-Hadamard codes with Latin-square tensor coloring, provably eliminating dominant intra-layer cross-talk ($\bar{C}_{ij} = 0$).
+- **O — Orthogonal**: Structures probe vectors via Sylvester-Hadamard codes with Latin-square tensor coloring. A full cycle cancels selected row and column cross-talk terms for a fixed curvature matrix; changing model weights between probes can leave residual error.
 - **N — Newton**: Formulates a clipped stochastic diagonal preconditioned update. Relative performance against AdamW and second-order peers remains unmeasured.
 
 ### Core Scientific & Engineering Pillars
-- **Exact Autodiff Hessian-Vector Products (HVP)**: Evaluates exact reverse-over-forward JVP/VJP compositions without finite-difference discretization error. Finite differences are strictly restricted to external baseline comparisons in `radon/baselines/`.
+- **Exact Autodiff Hessian-Vector Products (HVP)**: PyTorch uses reverse-over-reverse autodiff for the training path; the optional JAX helper uses forward-over-reverse. Neither uses finite differences.
 - **Formal Verification in Lean 4**: Machine-checked carrier and coded-probe identities in Mathlib v4.32.1 (`proofs/RadonCert/RadonCert/Radon.lean`) with no project-specific axioms or `sorry` placeholders. The full optimizer and training outcomes are outside the formal model.
 - **Google Cloud TPU v4-32 Target**: Optional torch_xla wrappers target 16 chips and 32 TensorCores across 4 hosts. Physical multi-host execution has not been verified here.
 - **Phase 6 Hyperparameter Sweep Matrix**: The owner plans 2,500-step runs on 600M tokens across seeds 42, 1337, 2024. Only small CPU smoke tests have run.
@@ -102,7 +102,7 @@ cd paper && pdflatex -interaction=nonstopmode radon.tex && bibtex radon && pdfla
 | :--- | :--- | :--- |
 | `radon/` | Core second-order optimizer library | `Radon`, `ProbeGenerator`, `code_tensor`, `hadamard`, `fisher_diag_sample`, `residual_probe` |
 | `radon/optimizer.py` | Core optimizer implementation | `Radon(torch.optim.Optimizer)`: `accumulate_core()`, `accumulate_residual()`, `step()`, `stats()` |
-| `radon/hvp.py` | Exact reverse-over-forward autodiff | `torch_hvp(loss, params, vectors)`, `jax_forward_over_reverse_hvp(f, primals, tangents)` |
+| `radon/hvp.py` | Exact autodiff HVPs | `torch_hvp(loss, params, vectors)`, `jax_forward_over_reverse_hvp(f, primals, tangents)` |
 | `radon/probes.py` | Probing & coded matrix recovery | `hadamard(m)`, `code_tensor(shape, m, device)`, `flip_signs(shape, seed, device, dtype)`, `ProbeGenerator` |
 | `radon/split.py` | Curvature decomposition | `fisher_diag_sample(model, params, inputs)`, `residual_probe(model, params, inputs, loss_from_logits, probes)` |
 | `radon/tpu.py` | Google Cloud TPU v4-32 Pod co-design | `TPUPodConfig`, `get_device()`, `mark_step()`, `tpu_all_reduce()`, `sync_curvature_dict()`, `wrap_tpu_loader()` |
@@ -141,7 +141,7 @@ cd paper && pdflatex -interaction=nonstopmode radon.tex && bibtex radon && pdfla
 ## 6. Engineering Invariants & Coding Standards
 
 ### Autodiff & Mathematical Precision
-1. **Autodiff Integrity**: Never replace exact reverse-over-forward Hessian-vector products with finite differences in `radon/hvp.py` or core algorithms. Finite differences are strictly for external baseline comparisons in `radon/baselines/`.
+1. **Autodiff Integrity**: Never replace exact autodiff Hessian-vector products with finite differences in `radon/hvp.py` or core algorithms.
 2. **Double Precision for Numerical Stability**: All numerical exactness gates in `verify/numerical_gate.py` must run in `torch.float64` against dense autograd ground truth with strict tolerances ($\le 10^{-10}$ for exact identities, $\le 8 \times 10^{-2}$ for statistical expectations).
 3. **Positive Damping**: Curvature damping $\epsilon_{\text{damp}}$ must satisfy $\epsilon_{\text{damp}} \ge 10^{-12}$. The structural core $S$ is positive semidefinite, but the residual and estimated full Hessian diagonal can be negative; the update denominator is clamped below by $\epsilon_{\text{damp}}$.
 4. **Latin-Square Code Assignment**: Weight matrices must assign Hadamard codes via $(a + b) \pmod m$, ensuring all immediate row and column neighbors have mutually orthogonal codes ($\bar{C}_{ij} = 0$).

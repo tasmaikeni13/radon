@@ -1,7 +1,7 @@
 # Phase 1: Mathematical & Formal Analysis of Curvature Carriers and Split-Exact Decomposition
 
 ## 1. Executive Summary
-Phase 1 formalizes the foundation of second-order neural curvature estimation: the algebra of curvature carriers, the pullback composition law, and the split-exact decomposition of the loss Hessian into a positive semidefinite structural core and a gradient-vanishing residual. Every claim is machine-verified in Lean 4 without unproved axioms or `sorry`.
+Phase 1 formalizes curvature-carrier algebra and the split-exact Hessian identity. The structural core is positive semidefinite when the outer-loss Hessian is positive semidefinite. The residual is linear in the outer-loss gradient and vanishes if that gradient is zero. Lean checks the stated algebraic identities with no project-specific axioms or `sorry`; it does not formalize a neural training run.
 
 ---
 
@@ -19,7 +19,7 @@ $$J_h = J_g J_f, \quad \mathcal{H}_h(\lambda) = J_f^\top \mathcal{H}_g(\lambda) 
 ### The Split-Exact Decomposition
 For loss $\mathcal{L} = \ell \circ f$:
 $$H = S + R$$
-- $S = J_f^\top (\nabla^2 \ell) J_f \succeq 0$ (Structural Core, PSD)
+- $S = J_f^\top (\nabla^2 \ell) J_f \succeq 0$ when $\nabla^2\ell\succeq 0$ (Structural Core)
 - $R = \mathcal{H}_f(\nabla \ell)$ (Residual, linear in $\nabla \ell$)
 
 ---
@@ -31,7 +31,7 @@ The following theorems must compile with zero `sorry` in `proofs/RadonCert/Radon
 3. `Radon.core_posCore`: Positive semidefiniteness of structural core $S$.
 4. `Radon.posCore_diag_nonneg`: Non-negativity of $\mathrm{diag}(S)$.
 5. `Radon.residual_smul`: Linearity of residual in loss gradient.
-6. `Radon.residual_zero`: Vanishing residual at stationary points ($\nabla \ell = 0$).
+6. `Radon.residual_zero`: Vanishing residual when the outer-loss gradient is zero. A zero parameter gradient alone is insufficient.
 
 ---
 

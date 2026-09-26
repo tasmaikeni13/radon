@@ -4,6 +4,6 @@
 
 `radon/tpu.py` contains optional torch_xla device and collective wrappers. No physical TPU is attached in the local verification environment, so multi-host execution, throughput, and communication correctness remain unverified. The v4-32 target is 16 chips and 32 TensorCores across 4 hosts, according to Google Cloud's v4 topology table.
 
-The peer optimizer implementations need method-level review before competitive comparisons. In particular, a gradient-magnitude proxy is not a Hessian estimate for Sophia-H or AdaHessian, and the current Shampoo implementation falls back to a diagonal update for large matrices.
+Sophia-H and AdaHessian now use autodiff Hutchinson samples. Their curvature samples are averaged across workers before the moving-average update, matching the shared gradient synchronization. Shampoo uses blocked matrix preconditioners for large matrices and a diagonal fallback only for vectors. These CPU checks do not establish method-level parity or performance on TPU hardware.
 
 Run `python3 -m verify.verify_kernels` and `pytest tests/` for the current CPU checks. These are software smoke checks, not hardware certification.

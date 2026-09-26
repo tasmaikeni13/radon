@@ -26,6 +26,8 @@ A cycle of \(m\) Hadamard probes uses a fixed random sign vector \(s\) and code 
 \operatorname{Var}(\hat M_{ii})=\sum_{j\ne i}M_{ij}^2\bar C_{ij}^2.
 \]
 
+This identity assumes the same matrix \(M\) for every probe in the cycle. In training, probes occur on different steps while parameters change, so exact cancellation and this variance formula need not hold for the resulting moving-target average.
+
 For a 2D weight tensor, `code(a,b)=(a+b) mod m` gives distinct orthogonal codes to immediate row and column neighbors. Coordinates with the same code still interfere. The code design therefore removes specific cross-talk terms; it does not guarantee a fixed improvement factor against \(m\) independent Hutchinson probes for every matrix. An antithetic pair \(v,-v\) yields the same product \(v\odot Mv\); pairing alone does not halve diagonal-estimator variance.
 
 If the structural diagonal were exact, probing only \(R\) would leave variance governed by \(R\). In the implemented optimizer the structural diagonal is sampled, so both channels' errors must be measured. Scaling the outer loss gradient by \(c\) scales the ideal residual variance by \(c^2\), holding the model derivatives fixed.

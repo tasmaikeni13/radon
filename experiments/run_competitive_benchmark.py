@@ -33,7 +33,7 @@ from experiments.sweep_hparams import (
 from experiments.sweep_hparams import (
     validate_raw as validate_sweep_raw,
 )
-from experiments.training import TrainSpec, run_training
+from experiments.training import TrainSpec, run_training, validate_measured_result
 from radon.tpu import get_device, get_world_size, is_master
 
 SEEDS = (42, 43, 44)
@@ -57,26 +57,40 @@ def selected_configs() -> dict[str, dict[str, Any]]:
         raise ValueError("Phase 6 report has incomplete seed coverage")
     selected = {}
     for name, candidates in candidate_grid().items():
+        reported = report["optimizers"][name]
+        if len(reported["candidates"]) != len(candidates):
+            raise ValueError(f"Incomplete Phase 6 candidate coverage for {name}")
         measured = []
         for index, hp in enumerate(candidates):
-            losses = []
+            runs = []
             for seed in SWEEP_SEEDS:
                 path = sweep_raw_path(name, index, seed)
                 if not path.exists():
                     raise FileNotFoundError(f"Missing Phase 6 raw run: {path}")
                 raw = json.loads(path.read_text(encoding="utf-8"))
                 validate_sweep_raw(raw, name, hp, seed)
-                losses.append(raw["val_loss"])
-            measured.append(mean(losses))
+                runs.append(raw)
+            loss = mean(run["val_loss"] for run in runs)
+            summary = reported["candidates"][index]
+            if summary["candidate"] != index or summary["hyperparameters"] != hp:
+                raise ValueError(f"Phase 6 candidate metadata differs from raw runs for {name}")
+            expected_files = [
+                str(sweep_raw_path(name, index, seed).relative_to(REPO_ROOT))
+                for seed in SWEEP_SEEDS
+            ]
+            if summary["raw_files"] != expected_files:
+                raise ValueError(f"Phase 6 candidate file list differs for {name}")
+            if not math.isclose(summary["mean_val_loss"], loss, rel_tol=1e-12):
+                raise ValueError(f"Phase 6 candidate loss differs from raw runs for {name}")
+            if not math.isclose(
+                summary["mean_val_ppl"], mean(run["val_ppl"] for run in runs), rel_tol=1e-12
+            ):
+                raise ValueError(f"Phase 6 candidate perplexity differs from raw runs for {name}")
+            measured.append(loss)
         winner = min(range(len(candidates)), key=lambda index: measured[index])
-        reported = report["optimizers"][name]
-        if len(reported["candidates"]) != len(candidates):
-            raise ValueError(f"Incomplete Phase 6 candidate coverage for {name}")
         best = reported["best"]
-        if best["candidate"] != winner or best["hyperparameters"] != candidates[winner]:
+        if best != reported["candidates"][winner]:
             raise ValueError(f"Phase 6 selection differs from raw runs for {name}")
-        if not math.isclose(best["mean_val_loss"], measured[winner], rel_tol=1e-12):
-            raise ValueError(f"Phase 6 selected loss differs from raw runs for {name}")
         selected[name] = candidates[winner]
     return selected
 
@@ -95,12 +109,11 @@ def validate_raw(
         "smoke": False,
         "synthetic_train": False,
         "synthetic_valid": False,
+        "block_size": 2048,
+        "train_file": str(TRAIN_NPY),
+        "valid_file": str(VALID_NPY),
     }
-    for key, value in expected.items():
-        if result.get(key) != value:
-            raise ValueError(f"Invalid Phase 7 raw result: {key}={result.get(key)!r}")
-    if not all(math.isfinite(result[key]) for key in ("val_loss", "val_ppl", "elapsed_seconds")):
-        raise ValueError("Non-finite benchmark metric")
+    validate_measured_result(result, expected)
 
 
 def run_smoke(steps: int) -> None:
@@ -204,10 +217,21 @@ def verify_all(verbose: bool = True) -> None:
             validate_raw(raw, optimizer, seed, hp, steps)
             runs.append(raw)
         summary = report["results"][optimizer]
-        if summary["hyperparameters"] != hp or not math.isclose(
-            summary["mean_val_loss"], mean(run["val_loss"] for run in runs), rel_tol=1e-12
-        ):
+        if summary["hyperparameters"] != hp:
             raise ValueError(f"Phase 7 summary differs from raw runs for {optimizer}")
+        summary_metrics = {
+            "mean_val_loss": mean(run["val_loss"] for run in runs),
+            "std_val_loss": stdev(run["val_loss"] for run in runs),
+            "mean_val_ppl": mean(run["val_ppl"] for run in runs),
+            "std_val_ppl": stdev(run["val_ppl"] for run in runs),
+            "mean_step_time_ms": mean(run["mean_step_time_ms"] for run in runs),
+        }
+        for key, value in summary_metrics.items():
+            if not math.isclose(summary[key], value, rel_tol=1e-12, abs_tol=1e-12):
+                raise ValueError(f"Phase 7 {key} differs from raw runs for {optimizer}")
+        expected_files = [str(raw_path(optimizer, seed).relative_to(REPO_ROOT)) for seed in SEEDS]
+        if summary["raw_files"] != expected_files:
+            raise ValueError(f"Phase 7 raw file list differs for {optimizer}")
         if verbose:
             print(f"{optimizer:<12s} validation PPL {summary['mean_val_ppl']:.3f} ± {summary['std_val_ppl']:.3f}")
     if verbose:

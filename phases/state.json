@@ -13,7 +13,7 @@
       "output_artifacts": [
         "proofs/RadonCert/RadonCert/Radon.lean"
       ],
-      "last_verified": "2026-09-26T03:34:05.653324+00:00"
+      "last_verified": "2026-09-26T03:43:44.019499+00:00"
     },
     "2": {
       "id": 2,
@@ -24,11 +24,11 @@
       ],
       "gate_cmd": "python3 verify/numerical_gate.py",
       "output_artifacts": [],
-      "last_verified": "2026-09-26T03:34:10.805376+00:00"
+      "last_verified": "2026-09-26T03:43:49.019530+00:00"
     },
     "3": {
       "id": 3,
-      "name": "Hardware Pod & High-Performance Kernel Suite",
+      "name": "Hardware Target & Kernel CPU Checks",
       "status": "GATE_PASSED",
       "dependencies": [
         1
@@ -40,7 +40,7 @@
         "radon/split.py",
         "radon/baselines/"
       ],
-      "last_verified": "2026-09-26T03:34:15.304658+00:00"
+      "last_verified": "2026-09-26T03:43:53.178428+00:00"
     },
     "4": {
       "id": 4,
@@ -54,11 +54,11 @@
         "models/transformer.py",
         "data/fineweb.py"
       ],
-      "last_verified": "2026-09-26T03:34:22.255599+00:00"
+      "last_verified": "2026-09-26T03:43:59.356040+00:00"
     },
     "5": {
       "id": 5,
-      "name": "Numerical Exactness Gate & Microbenchmarks",
+      "name": "Numerical Exactness Gate",
       "status": "GATE_PASSED",
       "dependencies": [
         2,
@@ -66,7 +66,7 @@
       ],
       "gate_cmd": "python3 verify/numerical_gate.py",
       "output_artifacts": [],
-      "last_verified": "2026-09-26T03:34:27.637566+00:00"
+      "last_verified": "2026-09-26T03:44:04.615240+00:00"
     },
     "6": {
       "id": 6,
@@ -77,7 +77,7 @@
       ],
       "gate_cmd": "python3 experiments/sweep_hparams.py --smoke --steps 1",
       "output_artifacts": [],
-      "last_verified": "2026-09-26T03:34:43.773722+00:00"
+      "last_verified": "2026-09-26T03:44:20.144920+00:00"
     },
     "7": {
       "id": 7,
@@ -90,7 +90,7 @@
       ],
       "gate_cmd": "python3 experiments/run_competitive_benchmark.py --smoke --steps 1",
       "output_artifacts": [],
-      "last_verified": "2026-09-26T03:35:00.551829+00:00"
+      "last_verified": "2026-09-26T03:44:37.016683+00:00"
     },
     "8": {
       "id": 8,
@@ -101,7 +101,7 @@
       ],
       "gate_cmd": "python3 experiments/run_ablations.py --smoke --steps 1",
       "output_artifacts": [],
-      "last_verified": "2026-09-26T03:35:11.617738+00:00"
+      "last_verified": "2026-09-26T03:44:48.629425+00:00"
     },
     "9": {
       "id": 9,

@@ -26,6 +26,7 @@ from radon.tpu import (
     get_tpu_config,
     get_world_size,
     mark_step,
+    sync_curvature_dict,
     tpu_all_reduce,
     tpu_optimizer_step,
 )
@@ -180,7 +181,7 @@ def _update_curvature(
             seed=spec.seed + step,
             absolute=spec.optimizer == "adahessian",
         )
-        optimizer.update_hessian(samples)
+        optimizer.update_hessian(sync_curvature_dict(samples, op="mean"))
 
 
 @torch.no_grad()
@@ -325,3 +326,45 @@ def run_training(spec: TrainSpec, device: torch.device | None = None) -> dict[st
         "mean_step_time_ms": elapsed * 1000 / spec.steps,
         "smoke": spec.smoke,
     }
+
+
+def validate_measured_result(result: dict[str, Any], expected: dict[str, Any]) -> None:
+    """Reject incomplete or internally inconsistent raw training records."""
+    for key, value in expected.items():
+        if result.get(key) != value:
+            raise ValueError(f"Raw run has invalid {key}: {result.get(key)!r}")
+    if result.get("smoke") or result.get("synthetic_train") or result.get("synthetic_valid"):
+        raise ValueError("Measured run cannot use smoke mode or synthetic data")
+    if result.get("device_type") not in {"cpu", "cuda", "xla"} or not result.get("hardware"):
+        raise ValueError("Raw run is missing hardware provenance")
+    world_size = result.get("world_size")
+    per_rank = result.get("tokens_per_rank_step")
+    plan = result.get("microbatch_plan")
+    if not isinstance(world_size, int) or world_size < 1:
+        raise ValueError("Raw run has invalid worker count")
+    if result["device_type"] == "xla" and world_size != 16:
+        raise ValueError("TPU v4-32 run must have 16 workers")
+    if not isinstance(per_rank, int) or per_rank < 1:
+        raise ValueError("Raw run has invalid per-rank token count")
+    if per_rank * world_size * result["steps"] != result["tokens_total"]:
+        raise ValueError("Raw run token accounting is inconsistent")
+    if not isinstance(plan, list) or sum(batch * length for batch, length in plan) != per_rank:
+        raise ValueError("Raw run microbatch plan is inconsistent")
+    model_config = result.get("model_config")
+    if not isinstance(model_config, dict) or model_config.get("block_size") != result.get("block_size"):
+        raise ValueError("Raw run model configuration is incomplete")
+    if result.get("train_file") == result.get("valid_file"):
+        raise ValueError("Raw run uses the same train and validation file")
+    metrics = ("final_train_loss", "val_loss", "val_ppl", "elapsed_seconds", "mean_step_time_ms")
+    if not all(isinstance(result.get(key), (int, float)) and math.isfinite(result[key]) for key in metrics):
+        raise ValueError("Raw run has non-finite or missing metrics")
+    if result["elapsed_seconds"] <= 0 or result["val_ppl"] <= 0:
+        raise ValueError("Raw run has invalid timing or perplexity")
+    if not math.isclose(result["val_ppl"], math.exp(result["val_loss"]), rel_tol=1e-10):
+        raise ValueError("Raw run perplexity differs from validation loss")
+    if not math.isclose(
+        result["mean_step_time_ms"],
+        1000 * result["elapsed_seconds"] / result["steps"],
+        rel_tol=1e-10,
+    ):
+        raise ValueError("Raw run mean step time differs from elapsed time")

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 from pathlib import Path
 from statistics import mean, stdev
@@ -28,7 +27,7 @@ from experiments.run_competitive_benchmark import (
     verify_all as verify_benchmark,
 )
 from experiments.sweep_hparams import SMOKE_CONFIGS
-from experiments.training import TrainSpec, run_training
+from experiments.training import TrainSpec, run_training, validate_measured_result
 from radon.tpu import get_device, get_world_size, is_master
 
 SEEDS = (42, 43, 44)
@@ -70,12 +69,11 @@ def validate_raw(
         "smoke": False,
         "synthetic_train": False,
         "synthetic_valid": False,
+        "block_size": 2048,
+        "train_file": str(TRAIN_NPY),
+        "valid_file": str(VALID_NPY),
     }
-    for key, value in expected.items():
-        if result.get(key) != value:
-            raise ValueError(f"Invalid {variant_name} raw result: {key}={result.get(key)!r}")
-    if not math.isfinite(result["val_loss"]):
-        raise ValueError("Non-finite ablation validation loss")
+    validate_measured_result(result, expected)
 
 
 def run_smoke(steps: int) -> None:
