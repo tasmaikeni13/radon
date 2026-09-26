@@ -11,15 +11,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from radon.baselines import AdaHessian, AdamWBaseline, Shampoo, SophiaH
+from radon.baselines.curvature import hutchinson_diag_sample
 from radon.optimizer import Radon
 from radon.probes import ProbeGenerator
 from radon.split import fisher_diag_sample, residual_probe
 from radon.tpu import (
-    DEFAULT_TPU_POD,
     get_device,
     get_tpu_config,
-    get_world_size,
-    is_tpu_available,
     mark_step,
     sync_curvature_dict,
     tpu_all_reduce,
@@ -28,9 +26,10 @@ from radon.tpu import (
 
 def test_tpu_pod_abstractions():
     cfg = get_tpu_config()
-    assert cfg.num_hosts == 16, f"Expected 16 hosts, got {cfg.num_hosts}"
+    assert cfg.num_hosts == 4, f"Expected 4 hosts, got {cfg.num_hosts}"
+    assert cfg.total_chips == cfg.num_hosts * cfg.chips_per_host
     assert cfg.total_tensor_cores == 32, f"Expected 32 tensor cores, got {cfg.total_tensor_cores}"
-    assert cfg.host_bounds == "1,1,1"
+    assert cfg.host_bounds == "1,1,4"
     assert cfg.chip_bounds == "2,2,1"
 
     dev = get_device()
@@ -49,7 +48,7 @@ def test_tpu_pod_abstractions():
     assert synced[0][1].shape == (3, 3)
 
     mark_step()
-    print(f"  {'TPU Pod Abstraction':<20s} Hardware config verified: {cfg.pod_name} (16 hosts / 32 cores, device={dev})")
+    print(f"  {'TPU Pod Abstraction':<20s} Configuration checked: {cfg.pod_name} (4 hosts / 16 chips / 32 cores, device={dev})")
     return True
 
 
@@ -75,6 +74,15 @@ def test_optimizer(name, opt_factory):
     loss = F.cross_entropy(out, y)
     loss.backward()
 
+    if name in {"SophiaH", "AdaHessian"}:
+        samples = hutchinson_diag_sample(
+            model, list(model.parameters()), x, y, seed=42,
+            absolute=name == "AdaHessian",
+            loss_fn=lambda network, inputs, targets: F.cross_entropy(network(inputs), targets),
+        )
+        opt.update_hessian(samples)
+        assert any(sample.abs().sum().item() > 0 for _, sample in samples)
+
     # Step
     opt.step()
     opt.zero_grad()
@@ -97,7 +105,7 @@ def test_radon_pipeline():
     y = torch.randint(0, 8, (4,))
     params = list(model.parameters())
 
-    opt = Radon(params, lr=1e-3, gamma=0.02)
+    opt = Radon(params, lr=1e-3, gamma=0.02, cycle_m=4)
     prober = ProbeGenerator(params, m=4)
 
     # 1. Forward & backward
@@ -132,7 +140,7 @@ def main():
     test_optimizer("AdamWBaseline", lambda m: AdamWBaseline(m.parameters(), lr=1e-3))
     test_optimizer("SophiaH", lambda m: SophiaH(m.parameters(), lr=1e-3))
     test_optimizer("AdaHessian", lambda m: AdaHessian(m.parameters(), lr=1e-3))
-    test_optimizer("Shampoo", lambda m: Shampoo(m.parameters(), lr=1e-3))
+    test_optimizer("Shampoo", lambda m: Shampoo(m.parameters(), lr=1e-3, update_freq=1, block_size=16))
 
     print("=" * 80)
     print("[SUCCESS] All 5 optimizer kernels verified successfully!")

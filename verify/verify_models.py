@@ -14,7 +14,7 @@ from models.vit import VisionTransformer, ViTConfig
 
 
 def test_causal_transformer():
-    print("Testing 124.5M Causal Transformer...")
+    print("Testing 125.16M Causal Transformer...")
     cfg = TransformerConfig(
         vocab_size=50304,
         block_size=2048,
@@ -25,7 +25,7 @@ def test_causal_transformer():
     model = CausalTransformer(cfg)
     n_params = model.get_num_params()
     print(f"  Total parameters: {n_params:,} ({n_params / 1e6:.2f}M)")
-    assert 120_000_000 <= n_params <= 130_000_000, f"Expected ~125M params, got {n_params}"
+    assert n_params == 125_160_192, f"Unexpected model size: {n_params}"
 
     # Forward pass smoke test
     x = torch.randint(0, 50257, (2, 64))
@@ -33,6 +33,8 @@ def test_causal_transformer():
     logits, loss = model(x, y)
     assert logits.shape == (2, 64, 50304)
     assert loss is not None and not torch.isnan(loss)
+    loss.backward()
+    assert all(p.grad is not None and torch.isfinite(p.grad).all() for p in model.parameters())
     print(f"  Forward pass successful: logits shape={logits.shape}, loss={loss.item():.4f}")
     return True
 
@@ -57,6 +59,8 @@ def test_vision_transformer():
     out = model(x)
     assert out.shape == (2, 1000)
     assert not torch.isnan(out).any()
+    out.square().mean().backward()
+    assert all(p.grad is not None and torch.isfinite(p.grad).all() for p in model.parameters())
     print(f"  Forward pass successful: out shape={out.shape}")
     return True
 

@@ -32,6 +32,8 @@ class FineWebDataset:
 
         if data_path.exists():
             self.data = np.load(str(data_path), mmap_mode="r")
+            if self.data.ndim != 1 or not np.issubdtype(self.data.dtype, np.integer):
+                raise ValueError(f"Token array must be one-dimensional integers: {data_path}")
             self.num_tokens = len(self.data)
             self.synthetic = False
         else:
@@ -64,7 +66,9 @@ class FineWebDataset:
             return x, y
 
         rng = np.random.default_rng(seed)
-        max_idx = len(self.data) - block_size - 1
+        max_idx = len(self.data) - block_size
+        if max_idx < 1:
+            raise ValueError("Token array must contain at least block_size + 1 positions")
         indices = rng.integers(0, max_idx, size=batch_size)
 
         x_chunks = [self.data[i : i + block_size].astype(np.int64) for i in indices]

@@ -75,3 +75,10 @@ class ProbeGenerator:
             )
             out.append(d * row[self.codes[i]])
         return out
+
+    def scheduled_probe(self, step: int, frequency: int = 4) -> list[torch.Tensor]:
+        """Probe on a scheduled step, keeping sign flips fixed for a full code cycle."""
+        if step < 0 or frequency < 1 or step % frequency:
+            raise ValueError("step must be a nonnegative multiple of frequency")
+        probe_index = step // frequency
+        return self.probe(cycle_idx=probe_index // self.m, r=probe_index % self.m)

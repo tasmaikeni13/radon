@@ -1,7 +1,8 @@
 """Numerical Exactness Gate for RADON — High-Precision Mirror of Lean 4 Theorems.
 
 Executes machine-precision (fp64) checks against dense autograd ground truth:
-  G1  split_exact               : H == S + R entrywise (S from dense J and closed-form Λ, R = H - S)
+  G1  split_exact               : H == S + R entrywise (S from dense J and closed-form Λ,
+                                    R from independent weighted-logit Hessian)
   G2  residual_products         : residual_probe == (H - S)v ⊙ v
   G3  core_posCore              : dense S is PSD; diag(S) >= 0
   G4  full_recovery             : (1/m) Σ p^k (v^k)ᵀ == R with all-pairs orthogonal codes
@@ -15,7 +16,6 @@ Executes machine-precision (fp64) checks against dense autograd ground truth:
 Exit code 0 iff every gate passes.
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -114,7 +114,17 @@ def main():
     lam_full = torch.block_diag(*blocks) / (batch_size * 1.0)
     s_dense = j_dense.T @ lam_full @ j_dense
     s_dense = 0.5 * (s_dense + s_dense.T)
-    r_dense = h_dense - s_dense
+    # Construct R independently as Σ_k (∂ℓ/∂logit_k) ∇² logit_k.
+    logits_for_grad = logits_of_theta(theta0.detach().requires_grad_(True))
+    logit_grad = torch.autograd.grad(
+        F.cross_entropy(logits_for_grad.reshape(batch_size, 5), y),
+        logits_for_grad,
+    )[0].detach()
+    r_dense = torch.autograd.functional.hessian(
+        lambda theta: (logits_of_theta(theta) * logit_grad).sum(),
+        theta0,
+    )
+    r_dense = 0.5 * (r_dense + r_dense.T)
 
     # G1: Split-Exact Decomposition
     check(
@@ -199,11 +209,20 @@ def main():
 
     # G6: Variance Gradient-Squared Scaling
     c_factor = 2.5
+    scaled_r = torch.autograd.functional.hessian(
+        lambda theta: (logits_of_theta(theta) * (c_factor * logit_grad)).sum(),
+        theta0,
+    )
+    check(
+        "G6 residual scales with outer gradient",
+        (scaled_r - c_factor * r_dense).abs().max().item(),
+        1e-12,
+    )
     scaled_var = torch.zeros(10)
     for i in range(10):
         for j in range(10):
             if i != j:
-                scaled_var[i] += ((c_factor * sub_m[i, j]) ** 2) * (c_bar[i, j] ** 2)
+                scaled_var[i] += (scaled_r[i, j] ** 2) * (c_bar[i, j] ** 2)
     check(
         "G6 variance_scaling (scales as c^2)",
         (scaled_var - (c_factor**2) * theoretical_var).abs().max().item(),
@@ -249,19 +268,19 @@ def main():
     )
 
     # G10: Zero Variance on Orthogonal Pairs
-    ortho_pairs_var = 0.0
-    for i in range(10):
-        for j in range(10):
-            if i != j and abs(c_bar[i, j]) < 1e-12:
-                ortho_pairs_var += (sub_m[i, j] ** 2) * (c_bar[i, j] ** 2)
-    check("G10 zero_orthogonal_variance (C_ij = 0 => Var = 0)", ortho_pairs_var, 1e-14)
+    orthogonal_matrix = torch.zeros_like(sub_m)
+    orthogonal_matrix[0, 1] = orthogonal_matrix[1, 0] = 1.0
+    ortho_estimates = []
+    for s in all_flips:
+        cycle_est = torch.zeros(10)
+        for r in range(m_code):
+            vr = s * had4[r, codes]
+            cycle_est += (orthogonal_matrix @ vr) * vr
+        ortho_estimates.append(cycle_est / m_code)
+    ortho_error = torch.stack(ortho_estimates).abs().max().item()
+    check("G10 zero_orthogonal_variance (tested probe cycle)", ortho_error, 1e-14)
 
     print("=" * 80)
-    out_file = REPO_ROOT / "runs" / "numerical_gate_report.json"
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_file, "w") as f:
-        json.dump(RESULTS, f, indent=2)
-
     if FAILS:
         print(f"[FAIL] {len(FAILS)} gates failed: {FAILS}")
         sys.exit(1)

@@ -2,12 +2,11 @@
 
 Target Hardware Architecture:
 - Google Cloud TPU v4-32 Pod Slice
-- 16 TPU v4 Host nodes
+- 4 TPU v4 host nodes
 - 32 TPU v4 TensorCore engines (2 TensorCores per v4 chip)
 - 32 GiB HBM2e per chip (1.2 TB/s memory bandwidth per chip)
-- Interconnect: 3D torus optical circuit switch (OCS) Inter-Chip Interconnect (ICI)
-  providing 4.8 Tbps bisection bandwidth
-- Host bounds: TPU_HOST_BOUNDS="1,1,1"
+- Interconnect topology: 2x2x4 chip mesh
+- Host bounds: TPU_HOST_BOUNDS="1,1,4"
 - Chip bounds: TPU_CHIPS_PER_HOST_BOUNDS="2,2,1"
 
 Provides unified device detection, collective communication (all-reduce, broadcast),
@@ -15,21 +14,19 @@ XLA computation graph lowering (mark_step), and distributed loader wrapping with
 seamless fallback to CUDA or CPU.
 """
 
-from dataclasses import dataclass
 import os
-import sys
-from typing import Any, Callable, Sequence
+from dataclasses import dataclass
+from typing import Any, Sequence
+
 import torch
 
 # Check if PyTorch/XLA is available
 _HAS_XLA = False
 try:
-    import torch_xla
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.parallel_loader as pl
-    import torch_xla.distributed.xla_backend
     _HAS_XLA = True
-except (ImportError, Exception):
+except ImportError:
     _HAS_XLA = False
 
 
@@ -37,17 +34,16 @@ except (ImportError, Exception):
 class TPUPodConfig:
     """Hardware configuration specification for Google Cloud TPU v4-32 Pod Slice."""
     pod_name: str = "Google Cloud TPU v4-32 Pod Slice"
-    num_hosts: int = 16
-    chips_per_host: int = 2
+    num_hosts: int = 4
+    chips_per_host: int = 4
     tensor_cores_per_chip: int = 2
     total_chips: int = 16
     total_tensor_cores: int = 32
     hbm_per_chip_gb: float = 32.0
     total_hbm_gb: float = 512.0
-    peak_tflops_per_core_bf16: float = 275.0
-    total_peak_tflops_bf16: float = 8800.0
-    ici_bandwidth_tbps: float = 4.8
-    host_bounds: str = "1,1,1"
+    peak_tflops_per_core_bf16: float = 137.5
+    total_peak_tflops_bf16: float = 4400.0
+    host_bounds: str = "1,1,4"
     chip_bounds: str = "2,2,1"
 
 
@@ -65,7 +61,7 @@ def is_tpu_available() -> bool:
         return False
     try:
         dev = xm.xla_device()
-        return "xla" in str(dev).lower()
+        return xm.xla_device_hw(dev) == "TPU"
     except Exception:
         return False
 
@@ -73,9 +69,8 @@ def is_tpu_available() -> bool:
 def get_device() -> torch.device:
     """Returns the optimal compute device (XLA TPU -> CUDA GPU -> CPU fallback)."""
     # Check for forced CPU fallback via environment
-    if os.environ.get("JAX_PLATFORMS", "").lower() == "cpu" or os.environ.get("CUDA_VISIBLE_DEVICES") == "":
-        if not is_tpu_available():
-            return torch.device("cpu")
+    if os.environ.get("JAX_PLATFORMS", "").lower() == "cpu":
+        return torch.device("cpu")
 
     if is_tpu_available():
         return xm.xla_device()
@@ -125,35 +120,29 @@ def is_master() -> bool:
 
 def mark_step() -> None:
     """Triggers XLA computation graph lowering and lazy-tensor compilation on TPU.
-    
+
     Safe no-op when executing on CPU or CUDA.
     """
     if is_tpu_available():
-        try:
-            xm.mark_step()
-        except Exception:
-            pass
+        xm.mark_step()
 
 
 def tpu_all_reduce(tensor: torch.Tensor, op: str = "sum") -> torch.Tensor:
     """Synchronizes a tensor across all TPU v4-32 cores via high-speed ICI interconnect.
-    
+
     Args:
         tensor: PyTorch tensor to reduce across devices.
         op: Reduction operation ('sum', 'mean', 'min', 'max').
-    
+
     Returns:
         Synchronized reduced tensor.
     """
     if is_tpu_available():
-        try:
-            reduce_type = xm.REDUCE_SUM if op.lower() in ("sum", "mean") else op.lower()
-            reduced = xm.all_reduce(reduce_type, tensor)
-            if op.lower() == "mean":
-                reduced = reduced / get_world_size()
-            return reduced
-        except Exception:
-            pass
+        reduce_type = xm.REDUCE_SUM if op.lower() in ("sum", "mean") else op.lower()
+        reduced = xm.all_reduce(reduce_type, tensor)
+        if op.lower() == "mean":
+            reduced = reduced / get_world_size()
+        return reduced
 
     if torch.distributed.is_available() and torch.distributed.is_initialized():
         dist_op = torch.distributed.ReduceOp.SUM
@@ -171,15 +160,12 @@ def tpu_all_reduce(tensor: torch.Tensor, op: str = "sum") -> torch.Tensor:
 
 def tpu_optimizer_step(optimizer: torch.optim.Optimizer, barrier: bool = True) -> None:
     """Executes optimizer parameter step on TPU Pod with gradient sync and graph lowering.
-    
+
     Calls xm.optimizer_step on XLA TPU devices; calls standard optimizer.step() on CPU/CUDA.
     """
     if is_tpu_available():
-        try:
-            xm.optimizer_step(optimizer, barrier=barrier)
-            return
-        except Exception:
-            pass
+        xm.optimizer_step(optimizer, barrier=barrier)
+        return
     optimizer.step()
 
 
@@ -198,7 +184,7 @@ def sync_curvature_dict(
     op: str = "mean",
 ) -> list[tuple[torch.Tensor, torch.Tensor]]:
     """Synchronizes structural Fisher core or residual probe products across all TPU cores.
-    
+
     Ensures that in multi-core distributed TPU v4-32 training, curvature estimates
     are pooled across the entire cluster batch B_cluster = 32 * B_local.
     """

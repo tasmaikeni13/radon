@@ -9,20 +9,20 @@
 
 **RADON** stands for **R**esidual-aware **A**ntithetic **D**ecoupled **O**rthogonal **N**ewton Optimizer.
 
-Mathematically, the framework is grounded in the **Radon Transform** ($\mathcal{R}: H \mapsto \{Hv_k\}_{k=1}^m$), framing the fundamental problem of neural network second-order curvature estimation as an **optimal tomographic reconstruction problem** from 1D directional projections (Hessian-vector products).
+The name uses tomography as an analogy: directional Hessian-vector products $Hv_k$ reveal the action of $H$ along chosen inputs. This is a matrix probing problem; each HVP returns a vector, rather than a one-dimensional Radon transform projection.
 
 ### Acronym Decoupling
-- **R — Residual-aware**: Proves that the positive semidefinite structural Fisher core $S = J^\top (\nabla^2 \ell) J$ contributes zero noise and computes it with zero double-backwards, spending all directional probes exclusively on the gradient-vanishing residual $R = H - S$.
-- **A — Antithetic**: Employs antithetically coupled Rademacher and Hadamard probe vectors, proving a variance reduction of $\mathrm{Var}[\hat{h}] \le \frac{1}{2} \mathrm{Var}[\hat{h}_{\text{standard}}]$ and zero variance between orthogonal coordinates.
+- **R — Residual-aware**: Splits curvature into a positive semidefinite structural core $S = J^\top (\nabla^2 \ell) J$ and a residual $R = H - S$. The implementation samples the core diagonal, so that channel has nonzero sampling noise.
+- **A — Antithetic**: Uses a fixed Rademacher sign flip within each Hadamard code cycle. A probe pair $v,-v$ gives identical diagonal products; no universal factor-of-two variance reduction is established.
 - **D — Decoupled**: Decouples curvature diagonal damping ($\epsilon \ge 10^{-12}$) and trust-region coordinate clipping from first-order momentum and weight decay.
 - **O — Orthogonal**: Structures probe vectors via Sylvester-Hadamard codes with Latin-square tensor coloring, provably eliminating dominant intra-layer cross-talk ($\bar{C}_{ij} = 0$).
-- **N — Newton**: Formulates curvature-aware second-order stochastic preconditioned descent, certified in Lean 4 and outperforming AdamW and second-order peers (Sophia-H, AdaHessian, Distributed Shampoo).
+- **N — Newton**: Formulates a clipped stochastic diagonal preconditioned update. Relative performance against AdamW and second-order peers remains unmeasured.
 
 ### Core Scientific & Engineering Pillars
 - **Exact Autodiff Hessian-Vector Products (HVP)**: Evaluates exact reverse-over-forward JVP/VJP compositions without finite-difference discretization error. Finite differences are strictly restricted to external baseline comparisons in `radon/baselines/`.
-- **Formal Verification in Lean 4**: Machine-checked formal theorems in Mathlib v4.32.1 (`proofs/RadonCert/RadonCert/Radon.lean`) with zero unproved axioms and zero `sorry` placeholders.
-- **Google Cloud TPU v4-32 Pod Co-Design**: Native multi-host SPMD support (`radon.tpu`) with cross-core ICI collectives (`all-reduce`, `reduce-scatter`) synchronizing curvature across 16 TPU v4 host nodes and 32 TensorCore devices (4.8 Tbps bisection bandwidth).
-- **Phase 6 Hyperparameter Sweep Matrix**: Pre-training 2,500-step sweep on 600M tokens across seeds 42, 1337, 2024 confirming second-order contraction before launching the full 2.5B token pre-training campaign in Phase 7.
+- **Formal Verification in Lean 4**: Machine-checked carrier and coded-probe identities in Mathlib v4.32.1 (`proofs/RadonCert/RadonCert/Radon.lean`) with no project-specific axioms or `sorry` placeholders. The full optimizer and training outcomes are outside the formal model.
+- **Google Cloud TPU v4-32 Target**: Optional torch_xla wrappers target 16 chips and 32 TensorCores across 4 hosts. Physical multi-host execution has not been verified here.
+- **Phase 6 Hyperparameter Sweep Matrix**: The owner plans 2,500-step runs on 600M tokens across seeds 42, 1337, 2024. Only small CPU smoke tests have run.
 
 ---
 
@@ -40,7 +40,7 @@ Mathematically, the framework is grounded in the **Radon Transform** ($\mathcal{
 For distributed execution on Google Cloud TPU v4-32 Pod slices:
 ```bash
 export TPU_CHIPS_PER_HOST_BOUNDS="2,2,1"
-export TPU_HOST_BOUNDS="1,1,1"
+export TPU_HOST_BOUNDS="1,1,4"
 ```
 
 ### CPU / Host Fallback (CRITICAL)
@@ -75,22 +75,22 @@ python3 -m verify.verify_kernels
 python3 -m verify.verify_models
 
 # --- Autonomous Research Phases & Adaptive Cascades ---
-# Current Status: All 9 phases certified and PASSED.
+# Current Status: consult phases/state.json; heavy phases are pending.
 python3 phases/run_phase.py --status             # Inspect phase execution states & dependency graph
-python3 phases/run_phase.py --phase <N>          # Execute & verify specific phase sequentially (1-9)
-python3 phases/run_phase.py --all                # Verify full end-to-end research phase pipeline
+python3 phases/run_phase.py --phase <N>          # Run one current gate (phases 1-8)
+python3 phases/run_phase.py --all                # Gates 1-5 and small smoke tests 6-8 only
 python3 phases/evidence_audit.py                 # Audit empirical evidence JSONs & certificates (Phase 9)
 
 # --- Lean 4 Formal Verification ---
 cd proofs/RadonCert && ~/.elan/bin/lake build    # Compile & machine-check all formal theorems (0 sorry)
 
 # --- Competitive Benchmarks, Sweeps & Ablations ---
-python3 experiments/run_competitive_benchmark.py --smoke  # Fast sanity run of 124.5M peer competition
-python3 experiments/run_ablations.py --smoke              # Fast sanity run of ablation suite
-python3 experiments/sweep_hparams.py --smoke              # Fast sanity run of 3-seed 125M 600M-token HPO sweep
-python3 scripts/make_plots.py                             # Re-render all PNG figures in figures/
+python3 experiments/run_competitive_benchmark.py --smoke  # Three-seed small-model path check
+python3 experiments/run_ablations.py --smoke              # Small-model ablation path check
+python3 experiments/sweep_hparams.py --smoke              # Three-seed small-model path check
+# Generate plots only from reviewed measured results after the owner's heavy runs.
 
-# --- Camera-Ready LaTeX Paper Compilation ---
+# --- Research-draft LaTeX Compilation ---
 cd paper && pdflatex -interaction=nonstopmode radon.tex && bibtex radon && pdflatex -interaction=nonstopmode radon.tex && pdflatex -interaction=nonstopmode radon.tex
 ```
 
@@ -107,14 +107,14 @@ cd paper && pdflatex -interaction=nonstopmode radon.tex && bibtex radon && pdfla
 | `radon/split.py` | Curvature decomposition | `fisher_diag_sample(model, params, inputs)`, `residual_probe(model, params, inputs, loss_from_logits, probes)` |
 | `radon/tpu.py` | Google Cloud TPU v4-32 Pod co-design | `TPUPodConfig`, `get_device()`, `mark_step()`, `tpu_all_reduce()`, `sync_curvature_dict()`, `wrap_tpu_loader()` |
 | `radon/baselines/` | Peer baseline implementations | `AdaHessian`, `AdamWBaseline`, `Shampoo`, `SophiaH` |
-| `models/` | Frontier neural architectures | `CausalTransformer(config)`, `TransformerConfig` (124.5M), `VisionTransformer(config)`, `ViTConfig` (ViT-B/16) |
+| `models/` | Frontier neural architectures | `CausalTransformer(config)`, `TransformerConfig` (125.16M), `VisionTransformer(config)`, `ViTConfig` (ViT-Small/16) |
 | `data/` | Ingestion pipelines with fallbacks | `FineWebDataset` (2.5B tokens target, deterministic synthetic fallback), `load_dataset()` |
 | `proofs/RadonCert/` | Lean 4 formal verification | `RadonCert/Radon.lean` (`split_exact`, `core_posCore`, `coded_variance`, `split_variance_scaling`, 0 sorry) |
 | `verify/` | Rigorous verification gates | `numerical_gate.py` (10 fp64 invariant gates), `verify_kernels.py`, `verify_models.py` |
 | `phases/` | Autonomous self-correcting protocol | `run_phase.py`, `state.json`, `phase1.md` through `phase9.md`, `evidence_audit.py` |
 | `experiments/` | Reproducible benchmark drivers | `run_competitive_benchmark.py`, `run_ablations.py`, `sweep_hparams.py` |
-| `paper/` | Camera-ready LaTeX paper | `radon.tex`, `refs.bib`, `radon.pdf` |
-| `figures/` & `runs/` | Visualizations & metrics JSONs | `training_curves.png`, `variance_reduction.png`, `ablation_pareto.png`, benchmark JSONs |
+| `paper/` | Research-draft LaTeX paper | `radon.tex`, `refs.bib`; generated PDF is not tracked |
+| `figures/` & `runs/` | Reserved for measured outputs | Earlier fabricated figures and reports were removed |
 | `tests/` | Pytest test suite | `test_optimizer.py`, `test_probes.py` |
 
 ---
@@ -143,14 +143,14 @@ cd paper && pdflatex -interaction=nonstopmode radon.tex && bibtex radon && pdfla
 ### Autodiff & Mathematical Precision
 1. **Autodiff Integrity**: Never replace exact reverse-over-forward Hessian-vector products with finite differences in `radon/hvp.py` or core algorithms. Finite differences are strictly for external baseline comparisons in `radon/baselines/`.
 2. **Double Precision for Numerical Stability**: All numerical exactness gates in `verify/numerical_gate.py` must run in `torch.float64` against dense autograd ground truth with strict tolerances ($\le 10^{-10}$ for exact identities, $\le 8 \times 10^{-2}$ for statistical expectations).
-3. **Strict Positive Definiteness**: Curvature damping $\epsilon_{\text{damp}}$ must satisfy $\epsilon_{\text{damp}} \ge 10^{-12}$. The structural core $S$ is strictly positive semidefinite by construction, guaranteeing that the preconditioner diagonal base never induces negative Newton directions.
+3. **Positive Damping**: Curvature damping $\epsilon_{\text{damp}}$ must satisfy $\epsilon_{\text{damp}} \ge 10^{-12}$. The structural core $S$ is positive semidefinite, but the residual and estimated full Hessian diagonal can be negative; the update denominator is clamped below by $\epsilon_{\text{damp}}$.
 4. **Latin-Square Code Assignment**: Weight matrices must assign Hadamard codes via $(a + b) \pmod m$, ensuring all immediate row and column neighbors have mutually orthogonal codes ($\bar{C}_{ij} = 0$).
 
 ### Hermetic Data Pipelines & Synthetic Fallbacks
-- All data loaders (`FineWebDataset`) feature zero-dependency deterministic synthetic fallbacks. When external network access or Hugging Face servers are unreachable, loaders deterministically synthesize token batches, allowing complete end-to-end benchmark loops to execute hermetically offline.
+- `FineWebDataset` has a deterministic synthetic fallback for local tests. Full Phase 6-8 runs require real, separate train and validation token arrays and fail if either is missing.
 
 ### Formal Verification (Lean 4)
-- **Zero-Axiom Rule**: All theorems in `proofs/RadonCert/RadonCert/Radon.lean` must be machine-checked without `sorry` or unproved axioms. Verify using `lake build`.
+- **No Project-Specific Axioms**: All theorems in `proofs/RadonCert/RadonCert/Radon.lean` must be machine-checked without `sorry` or additional axioms. Verify using `lake build`; standard Lean logical axioms remain in the axiom report.
 
 ---
 
@@ -204,7 +204,7 @@ flowchart TD
 
 ## 9. Adaptive Research Phase Execution & Invalidation Cascade
 
-The research pipeline is organized into 9 sequentially certified phases governed by `phases/run_phase.py` and registered in `phases/state.json`:
+The research pipeline has 9 planned phases registered in `phases/state.json`. Phases 1-5 have local gates; Phases 6-8 have small smoke gates; Phase 9 requires later measured evidence.
 
 ```mermaid
 graph TD
@@ -229,11 +229,11 @@ When any upstream phase specification or theorem is modified, immediately execut
 | Trigger Event | Directly Invalidated Phases | Required Adaptation Actions |
 | :--- | :--- | :--- |
 | **Theorem / Minimax Rate Change** (Phase 1) | Phase 2, Phase 3, Phase 7, Phase 9 | 1. Update `paper/radon.tex` & recompile PDF.<br/>2. Update `proofs/RadonCert/RadonCert/Radon.lean` & run `lake build`.<br/>3. Re-derive probe budget bounds in `radon/probes.py`. |
-| **Statistical Bound / Variance Change** (Phase 2) | Phase 5, Phase 6, Phase 7, Phase 8, Phase 9 | 1. Update variance formula and Latin coloring in `radon/probes.py`.<br/>2. Regenerate variance comparison plots in `figures/variance_reduction.png`. |
-| **Hardware Pod / Kernel Change** (Phase 3) | Phase 4, Phase 7, Phase 9 | 1. Re-profile step time on TPU v4 TensorCores.<br/>2. Re-verify all baseline kernels in `radon/baselines/`. |
+| **Statistical Bound / Variance Change** (Phase 2) | Phase 5, Phase 6, Phase 7, Phase 8, Phase 9 | 1. Update variance formula and Latin coloring in `radon/probes.py`.<br/>2. Re-run the numerical gate; generate plots only from measured data. |
+| **Hardware Pod / Kernel Change** (Phase 3) | Phase 4, Phase 7, Phase 9 | 1. Re-verify all baseline kernels in `radon/baselines/`.<br/>2. Re-profile on TPU only when hardware is available. |
 | **Model Architecture / Data Pipeline Change** (Phase 4) | Phase 5, Phase 6, Phase 7, Phase 9 | 1. Run `python3 -m verify.verify_models`.<br/>2. Re-verify FineWeb-Edu streaming and synthetic fallback. |
 | **Exactness Gate / Tolerance Change** (Phase 5) | Phase 6, Phase 7, Phase 9 | 1. Run `python3 -m verify.numerical_gate`.<br/>2. Update Section 5 of `paper/radon.tex`. |
-| **HPO / Hyperparameter Change** (Phase 6) | Phase 7, Phase 9 | 1. Run `python3 experiments/sweep_hparams.py --smoke`.<br/>2. Verify optimal $\gamma = 0.02$ and probe cycle $m=16$. |
+| **HPO / Hyperparameter Change** (Phase 6) | Phase 7, Phase 9 | 1. Run `python3 experiments/sweep_hparams.py --smoke`.<br/>2. Select hyperparameters only from the owner's measured full sweep. |
 | **Benchmark Result Change** (Phase 7) | Phase 8, Phase 9 | 1. Update benchmark JSONs in `runs/competitive_benchmark/`.<br/>2. Recompile paper to produce updated `paper/radon.pdf`. |
 
 ---

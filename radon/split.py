@@ -10,15 +10,16 @@ Two channels estimate the two diagonals:
    Λ = diag(p) − ppᵀ regardless of targets, so sampled-label gradients yield an
    UNBIASED, ELEMENTWISE-NONNEGATIVE estimate of diag S:
        E[N · g̃ ⊙ g̃] = diag S,   g̃ = ∇θ mean-CE(logits, ŷ),  ŷ ~ softmax(logits).
-   Single forward + backward pass; no double-backward required. Non-negativity
-   mirrors Lean core_posCore / posCore_diag_nonneg: the preconditioner base cannot flip sign.
+   Single forward + backward pass; no double-backward required. Each sample is
+   non-negative, but finite sampling leaves nonzero structural-channel variance.
 
 2. RESIDUAL (residual_probe): coded sign probes applied to R alone (Lean
    split_probe_unbiased, split_variance_residual_only): R·v = H·v − S·v where
        H·v  is computed via double backward through the loss,
        S·v  = Jᵀ Λ (J v) via the dummy double-VJP trick with closed-form Λ.
-   Probing R instead of H is the core insight: estimator variance scales with ‖∇ℓ‖²
-   (Lean split_variance_scaling) and disappears at critical points (split_exact_at_critical).
+   For an exact structural diagonal, residual-probe variance scales with the square
+   of the outer-loss gradient (Lean split_variance_scaling). This does not make the
+   implemented total estimator noise vanish at a parameter stationary point.
 """
 
 from collections.abc import Callable, Sequence

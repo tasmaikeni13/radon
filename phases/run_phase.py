@@ -112,19 +112,24 @@ def verify_phase(phase_id: int, state: dict[str, Any], verbose: bool = True) -> 
         print(f"\n>>> Verifying Phase {phase_id}: {name}")
         print(f"    Dependencies: {deps or 'None'}")
 
+    if phase_id == 9:
+        print("[SKIP] Phase 9 needs measured Phase 6-8 results and is outside this run.")
+        return False
+
     for dep_id in deps:
         dep_phase = state.get("phases", {}).get(str(dep_id))
-        if not dep_phase or dep_phase["status"] != "PASSED":
-            print(f"[FAIL] Dependency Phase {dep_id} is not PASSED (Current: {dep_phase.get('status')}).")
+        if not dep_phase or dep_phase["status"] not in ("GATE_PASSED", "SMOKE_PASSED"):
+            current = None if dep_phase is None else dep_phase.get("status")
+            print(f"[FAIL] Dependency Phase {dep_id} has not passed its current gate (Current: {current}).")
             phase["status"] = "BLOCKED"
             save_state(state)
             return False
 
-    success = run_gate(gate_cmd) if gate_cmd else True
+    success = run_gate(gate_cmd) if gate_cmd else False
     if success:
-        phase["status"] = "PASSED"
+        phase["status"] = "GATE_PASSED" if phase_id <= 5 else "SMOKE_PASSED"
         phase["last_verified"] = datetime.now(timezone.utc).isoformat()
-        print(f"[PASS] Phase {phase_id} gate certified successfully.")
+        print(f"[PASS] Phase {phase_id} current gate passed; status: {phase['status']}.")
     else:
         phase["status"] = "FAILED"
         print(f"[FAIL] Phase {phase_id} gate failed verification.")
@@ -166,11 +171,11 @@ def main() -> None:
         sys.exit(0 if success else 1)
 
     if args.all:
-        for pid in sorted(state.get("phases", {}).keys(), key=int):
+        for pid in range(1, 9):
             if not verify_phase(int(pid), state):
                 print(f"[ABORT] Stopped execution due to failure in Phase {pid}.")
                 sys.exit(1)
-        print("\n[ALL PHASES PASSED] Full research pipeline certified!")
+        print("\n[CURRENT GATES PASSED] Phases 1-5 gates and 6-8 smoke tests passed; heavy runs remain pending.")
         sys.exit(0)
 
 

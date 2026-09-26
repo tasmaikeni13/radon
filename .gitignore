@@ -48,3 +48,13 @@ data/*.parquet
 .DS_Store
 .vscode/
 .idea/
+
+# Generated research artifacts are local until independently validated
+runs/*.json
+runs/**/*.json
+figures/*.png
+paper/*.pdf
+checkpoints/
+*.pt
+*.bin
+*.ckpt

@@ -3,6 +3,7 @@
 from collections.abc import Callable, Sequence
 
 import torch
+
 from radon.tpu import mark_step
 
 
@@ -80,9 +81,9 @@ class AdaHessian(torch.optim.Optimizer):
                 if power != 1.0:
                     h_hat = h_hat.pow(power)
 
-                denom = h_hat.clamp_min(eps)
+                denom = h_hat.add(eps)
                 step_size = lr / bias1
-                update = (exp_avg / denom).clamp_(-1.0, 1.0)
+                update = exp_avg / denom
                 p.add_(update, alpha=-step_size)
 
         mark_step()

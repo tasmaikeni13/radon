@@ -6,8 +6,9 @@ Curvature state incorporates two complementary channels reflecting H = S + R:
 * r : EMA over completed residual-probe cycles of coded products v ⊙ (Rv). Over a cycle of
       m Hadamard-Latin coded probes, row and column cross-talk cancels exactly.
 
-Total curvature: ĥ = ŝ + r̂ estimates diag(H) with variance governed exclusively by the
-residual R, contracting as ‖∇ℓ‖² → 0.
+Total curvature: ĥ = ŝ + r̂ estimates diag(H). The structural sample and residual
+probe both contribute estimation noise; only the ideal residual-probe variance is
+governed exclusively by R.
 
 Update: θ ← θ − lr · clamp( μ̂ / max(γ · ĥ, ε), −1, 1 ) − lr · λ · θ
 """
@@ -36,6 +37,14 @@ class Radon(torch.optim.Optimizer):
         r_weight: float = 1.0,
         sync_across_tpu: bool = True,
     ):
+        if eps < 1e-12:
+            raise ValueError("eps must be at least 1e-12")
+        if cycle_m < 1 or cycle_m & (cycle_m - 1):
+            raise ValueError("cycle_m must be a positive power of two")
+        if lr < 0 or gamma <= 0 or r_weight < 0:
+            raise ValueError("lr and r_weight must be nonnegative and gamma must be positive")
+        if not 0 <= beta_core < 1 or any(not 0 <= beta < 1 for beta in betas):
+            raise ValueError("betas and beta_core must be in [0, 1)")
         defaults = dict(
             lr=lr,
             betas=betas,

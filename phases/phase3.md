@@ -1,38 +1,9 @@
-# Phase 3: Hardware Acceleration & High-Performance Kernel Suite for TPU v4 Pods
+# Phase 3: Curvature and optimizer kernels
 
-## 1. Executive Summary
-Phase 3 implements hardware-accelerated kernels for Google Cloud TPU v4 Pod slices (specifically 16 TPU v4 accelerator chips / 32 TensorCore devices) using JAX/XLA forward-over-reverse automatic differentiation. We build both the RADON split-exact engine and a comprehensive peer baseline suite (AdamW, Sophia-H, AdaHessian, Distributed Shampoo).
+`radon/hvp.py` computes exact PyTorch Hessian-vector products by reverse-over-reverse autodiff and exposes a JAX forward-over-reverse helper when JAX is installed. `radon/split.py` computes sampled structural diagonals and residual products with PyTorch autograd. `radon/probes.py` creates Hadamard-coded sign directions; `radon/optimizer.py` applies clipped diagonal preconditioning. CPU tests exercise these paths.
 
----
+`radon/tpu.py` contains optional torch_xla device and collective wrappers. No physical TPU is attached in the local verification environment, so multi-host execution, throughput, and communication correctness remain unverified. The v4-32 target is 16 chips and 32 TensorCores across 4 hosts, according to Google Cloud's v4 topology table.
 
-## 2. Kernel Suite Architecture
+The peer optimizer implementations need method-level review before competitive comparisons. In particular, a gradient-magnitude proxy is not a Hessian estimate for Sophia-H or AdaHessian, and the current Shampoo implementation falls back to a diagonal update for large matrices.
 
-### 1. RADON Split-Exact Operator (`radon/hvp.py`, `radon/split.py`)
-- Forward-over-reverse JVP/VJP sweeps for exact Hessian-vector products $Hv$.
-- Structural Fisher core diagonal via sampled-label gradient backpropagation (single backward, zero double-backward).
-- Vectorized Sylvester-Hadamard probe generation with Latin-square tensor coloring (`radon/probes.py`).
-- Trust-region coordinate-wise clipping update (`radon/optimizer.py`).
-
-### 2. Peer Baseline Suite (`radon/baselines/`)
-- `adamw.py`: First-order baseline with decoupled weight decay and cosine schedule.
-- `sophia.py`: Second-order clipped stochastic curvature optimizer (Sophia-H).
-- `adahessian.py`: Hutchinson-diagonal adaptive second-order optimizer.
-- `shampoo.py`: Block-Kronecker preconditioned second-order optimizer.
-
----
-
-## 3. TPU Acceleration Invariants
-1. Purity: All computation kernels must be pure functions compatible with `@jax.jit`.
-2. Hardware Topology: Support Google Cloud TPU v4-32 Pod slice (`TPU_CHIPS_PER_HOST_BOUNDS="2,2,1"`, `TPU_HOST_BOUNDS="1,1,1"`).
-3. Memory Optimization: Gradient checkpointing and fused updates to prevent TPU HBM OOM.
-4. Latency Target: RADON per-step latency $\le 1.25 \times$ AdamW step time.
-
----
-
-## 4. Execution & Verification Gate
-```bash
-python3 verify/verify_kernels.py
-```
-**Gate PASS Criteria:**
-- All 5 optimizers initialize and execute forward, backward, and curvature step without errors.
-- Forward-over-reverse HVP matches dense numerical Hessian product with relative error $< 10^{-6}$.
+Run `python3 -m verify.verify_kernels` and `pytest tests/` for the current CPU checks. These are software smoke checks, not hardware certification.

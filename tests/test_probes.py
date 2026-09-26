@@ -43,6 +43,15 @@ class TestProbes(unittest.TestCase):
         # Verify probes change across cycle
         self.assertFalse(torch.allclose(probes_0[0], probes_1[0]))
 
+    def test_scheduled_probe_keeps_signs_for_full_cycle(self):
+        generator = ProbeGenerator([torch.zeros(4, 4)], m=4, seed=42)
+        cycle = [generator.scheduled_probe(4 * index)[0] for index in range(4)]
+        for index, probe in enumerate(cycle):
+            self.assertTrue(torch.equal(probe, generator.probe(0, index)[0]))
+        neighbor_coherence = sum(probe[0, 0] * probe[0, 1] for probe in cycle) / 4
+        self.assertEqual(neighbor_coherence.item(), 0.0)
+        self.assertTrue(torch.equal(generator.scheduled_probe(16)[0], generator.probe(1, 0)[0]))
+
 
 if __name__ == "__main__":
     unittest.main()

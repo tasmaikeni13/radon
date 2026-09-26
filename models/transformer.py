@@ -1,8 +1,8 @@
-"""124.5M Causal Transformer Architecture (GPT-2 Small standard).
+"""125.16M parameter causal Transformer architecture.
 
 L=12 layers, d=768 hidden dimension, 12 attention heads (head_dim=64),
 block_size=2048, vocab_size=50304 (padded multiple of 64).
-Tied embedding and lm_head weights. Parameter count: ~124.5M.
+Tied embedding and lm_head weights. Parameter count: 125,160,192.
 """
 
 import math
@@ -86,7 +86,7 @@ class Block(nn.Module):
 
 
 class CausalTransformer(nn.Module):
-    """124.5M Causal Transformer with tied weights and RMSNorm."""
+    """125.16M parameter causal Transformer with tied weights and RMSNorm."""
 
     def __init__(self, cfg: TransformerConfig | None = None):
         super().__init__()

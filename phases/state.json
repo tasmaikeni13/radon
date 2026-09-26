@@ -2,36 +2,34 @@
   "project": "RADON",
   "version": "1.0.0",
   "hardware_target": "Google Cloud TPU v4-32 Pod Slice (16 TPU v4 chips)",
-  "active_phase": 1,
+  "active_phase": 6,
   "phases": {
     "1": {
       "id": 1,
       "name": "Mathematical & Formal Analysis of Curvature Carriers",
-      "status": "PASSED",
+      "status": "GATE_PASSED",
       "dependencies": [],
       "gate_cmd": "cd proofs/RadonCert && ~/.elan/bin/lake build",
       "output_artifacts": [
         "proofs/RadonCert/RadonCert/Radon.lean"
       ],
-      "last_verified": "2026-09-25T05:15:13.158717+00:00"
+      "last_verified": "2026-09-26T03:34:05.653324+00:00"
     },
     "2": {
       "id": 2,
       "name": "Statistical & Monte Carlo Analysis: Coded Tomography",
-      "status": "PASSED",
+      "status": "GATE_PASSED",
       "dependencies": [
         1
       ],
       "gate_cmd": "python3 verify/numerical_gate.py",
-      "output_artifacts": [
-        "figures/variance_reduction.png"
-      ],
-      "last_verified": "2026-09-25T05:15:33.201565+00:00"
+      "output_artifacts": [],
+      "last_verified": "2026-09-26T03:34:10.805376+00:00"
     },
     "3": {
       "id": 3,
       "name": "Hardware Pod & High-Performance Kernel Suite",
-      "status": "PASSED",
+      "status": "GATE_PASSED",
       "dependencies": [
         1
       ],
@@ -42,12 +40,12 @@
         "radon/split.py",
         "radon/baselines/"
       ],
-      "last_verified": "2026-09-25T05:15:40.582073+00:00"
+      "last_verified": "2026-09-26T03:34:15.304658+00:00"
     },
     "4": {
       "id": 4,
       "name": "Frontier Architectures & Data Ingestion Pipeline",
-      "status": "PASSED",
+      "status": "GATE_PASSED",
       "dependencies": [
         3
       ],
@@ -56,80 +54,66 @@
         "models/transformer.py",
         "data/fineweb.py"
       ],
-      "last_verified": "2026-09-25T05:15:47.848022+00:00"
+      "last_verified": "2026-09-26T03:34:22.255599+00:00"
     },
     "5": {
       "id": 5,
       "name": "Numerical Exactness Gate & Microbenchmarks",
-      "status": "PASSED",
+      "status": "GATE_PASSED",
       "dependencies": [
         2,
         4
       ],
       "gate_cmd": "python3 verify/numerical_gate.py",
-      "output_artifacts": [
-        "runs/numerical_gate_report.json"
-      ],
-      "last_verified": "2026-09-25T05:15:58.064966+00:00"
+      "output_artifacts": [],
+      "last_verified": "2026-09-26T03:34:27.637566+00:00"
     },
     "6": {
       "id": 6,
       "name": "Hyperparameter Sweep for 3 Seeds (125M on 600M FineWeb-Edu for 2.5k Steps per Optimizer)",
-      "status": "PASSED",
+      "status": "SMOKE_PASSED",
       "dependencies": [
         5
       ],
-      "gate_cmd": "python3 experiments/sweep_hparams.py --smoke",
-      "output_artifacts": [
-        "runs/hpo_sweep_report.json"
-      ],
-      "last_verified": "2026-09-25T05:16:39.582211+00:00"
+      "gate_cmd": "python3 experiments/sweep_hparams.py --smoke --steps 1",
+      "output_artifacts": [],
+      "last_verified": "2026-09-26T03:34:43.773722+00:00"
     },
     "7": {
       "id": 7,
       "name": "Large-Scale Competitive Benchmark on FineWeb-Edu",
-      "status": "PASSED",
+      "status": "SMOKE_PASSED",
       "dependencies": [
         3,
         4,
         6
       ],
-      "gate_cmd": "python3 experiments/run_competitive_benchmark.py --verify-all",
-      "output_artifacts": [
-        "runs/competitive_benchmark/results.json",
-        "figures/training_curves.png"
-      ],
-      "last_verified": "2026-09-25T05:17:39.731759+00:00"
+      "gate_cmd": "python3 experiments/run_competitive_benchmark.py --smoke --steps 1",
+      "output_artifacts": [],
+      "last_verified": "2026-09-26T03:35:00.551829+00:00"
     },
     "8": {
       "id": 8,
       "name": "Robustness, Ablation & Scaling Laws",
-      "status": "PASSED",
+      "status": "SMOKE_PASSED",
       "dependencies": [
         7
       ],
-      "gate_cmd": "python3 experiments/run_ablations.py",
-      "output_artifacts": [
-        "runs/ablations_report.json"
-      ],
-      "last_verified": "2026-09-25T05:18:25.800798+00:00"
+      "gate_cmd": "python3 experiments/run_ablations.py --smoke --steps 1",
+      "output_artifacts": [],
+      "last_verified": "2026-09-26T03:35:11.617738+00:00"
     },
     "9": {
       "id": 9,
       "name": "Code Cleansing, PEP-8 Formatting & Publication Readiness",
-      "status": "PASSED",
+      "status": "NOT_RUN",
       "dependencies": [
         1,
         7,
         8
       ],
-      "gate_cmd": "python3 phases/evidence_audit.py",
-      "output_artifacts": [
-        "paper/radon.pdf",
-        "README.md",
-        "REPORT.md"
-      ],
-      "last_verified": "2026-09-25T05:18:41.578317+00:00"
+      "gate_cmd": null,
+      "output_artifacts": []
     }
   }
 }
